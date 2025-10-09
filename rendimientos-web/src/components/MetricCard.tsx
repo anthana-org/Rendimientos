@@ -13,18 +13,18 @@ interface MetricCardProps {
 
 export function MetricCard({ title, value, change, icon, iconBg }: MetricCardProps) {
   return (
-    <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-all duration-300 group">
+    <div className="bg-dark-bgSecondary rounded-2xl shadow-2xl p-6 border border-dark-border hover:border-green-500/50 hover:shadow-green-500/20 transition-all duration-300 group">
       <div className="flex items-center justify-between mb-4">
-        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${iconBg || 'bg-gradient-to-br from-gray-500 to-gray-600'} group-hover:scale-110 transition-transform duration-300`}>
+        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${iconBg || 'bg-gradient-to-br from-gray-500 to-gray-600'} group-hover:scale-110 transition-transform duration-300 shadow-lg`}>
           {icon}
         </div>
         <div className="text-right">
-          <p className="text-sm font-medium text-gray-500">{title}</p>
+          <p className="text-sm font-medium text-dark-textSecondary">{title}</p>
         </div>
       </div>
       
       <div className="space-y-2">
-        <p className="text-3xl font-bold text-gray-900 group-hover:text-blue-600 transition-colors duration-300">
+        <p className="text-3xl font-bold text-dark-text group-hover:text-green-400 transition-colors duration-300">
           {value}
         </p>
         
@@ -32,8 +32,8 @@ export function MetricCard({ title, value, change, icon, iconBg }: MetricCardPro
           <div className="flex items-center">
             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
               change.type === 'increase' 
-                ? 'bg-green-100 text-green-800' 
-                : 'bg-red-100 text-red-800'
+                ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
+                : 'bg-red-500/20 text-red-400 border border-red-500/30'
             }`}>
               <svg 
                 className={`w-3 h-3 mr-1 ${change.type === 'increase' ? 'rotate-0' : 'rotate-180'}`} 

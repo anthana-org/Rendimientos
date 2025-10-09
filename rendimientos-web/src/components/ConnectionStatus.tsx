@@ -59,9 +59,9 @@ export function ConnectionStatus() {
       case 'checking':
         return {
           text: 'Verificando...',
-          bgColor: 'bg-yellow-100',
-          textColor: 'text-yellow-800',
-          dotColor: 'bg-yellow-500'
+          bgColor: 'bg-green-100',
+          textColor: 'text-green-800',
+          dotColor: 'bg-green-500'
         };
       case 'connected':
         return {

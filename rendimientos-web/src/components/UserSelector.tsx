@@ -243,18 +243,18 @@ export function UserSelector({
       </div>
 
       {/* Información adicional */}
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
         <div className="flex">
           <div className="flex-shrink-0">
-            <svg className="h-5 w-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="h-5 w-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
           <div className="ml-3">
-            <h3 className="text-sm font-medium text-yellow-800">
+            <h3 className="text-sm font-medium text-green-800">
               Información importante
             </h3>
-            <div className="mt-2 text-sm text-yellow-700">
+            <div className="mt-2 text-sm text-green-700">
               <ul className="list-disc list-inside space-y-1">
                 <li>Los usuarios seleccionados recibirán el rendimiento global</li>
                 <li>Puedes cambiar la selección antes de aplicar el rendimiento</li>

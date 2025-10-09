@@ -362,7 +362,7 @@ export function DatePicker({ value, onChange, placeholder = "YYYY-MM", className
                   </button>
                 </div>
                 {tempStartDate && !tempEndDate && (
-                  <div className="text-center text-sm text-gray-600 bg-yellow-50 p-2 rounded-lg">
+                  <div className="text-center text-sm text-gray-600 bg-green-50 p-2 rounded-lg">
                     Selecciona la fecha final para completar el rango
                   </div>
                 )}
