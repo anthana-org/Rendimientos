@@ -1,4 +1,3 @@
-import { MetricCard } from '../components/MetricCard';
 import { SimpleRendimientosTable } from '../components/SimpleRendimientosTable';
 import { useContractsTotal } from '../hooks/useContractsTotal';
 import { WithdrawalButton } from '../components/WithdrawalButton';
