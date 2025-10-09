@@ -1,0 +1,13 @@
+{
+  "buildCommand": "cd rendimientos-web && npm run build",
+  "outputDirectory": "rendimientos-web/dist",
+  "installCommand": "cd rendimientos-web && npm install",
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
+
