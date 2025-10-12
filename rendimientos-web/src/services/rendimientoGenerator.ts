@@ -25,7 +25,7 @@ export class RendimientoGenerator {
       // Generar rendimientos para cada usuario
       for (const [userId, userContractsList] of userContracts) {
         for (const contract of userContractsList) {
-          // Generar rendimientos mensuales desde la fecha de inicio hasta hoy
+          // Generar rendimientos mensuales - cada mes es un contrato independiente
           const startDate = new Date(contract.startDate);
           const endDate = new Date(contract.expirationDate);
           const today = new Date();
@@ -36,38 +36,43 @@ export class RendimientoGenerator {
           // Determinar la fecha final (menor entre fecha de vencimiento y hoy)
           const finalDate = endDate < today ? endDate : today;
 
-          // Generar rendimientos mes por mes
+          // Generar rendimientos mes por mes - cada mes es un contrato mensual
           let currentDate = new Date(startDate);
+          let monthCounter = 1;
+          
           while (currentDate <= finalDate) {
             const period = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
             
-            // Calcular rendimiento mensual
+            // Para contratos mensuales, el capital se mantiene igual cada mes
+            // pero el rendimiento se calcula sobre el capital del mes
             const monthlyReturnAmount = (contract.investmentAmount * contract.monthlyReturn) / 100;
-            const balance = contract.investmentAmount + (monthlyReturnAmount * this.getMonthsDifference(startDate, currentDate));
+            const balance = contract.investmentAmount + monthlyReturnAmount; // Balance mensual
 
             const rendimientoData = {
               userId: userId,
               period: period,
-              capital: contract.investmentAmount,
+              capital: contract.investmentAmount, // Capital del mes
               rendimientoPercent: contract.monthlyReturn,
-              rendimientoAmount: monthlyReturnAmount,
-              balance: balance,
-              notes: `Rendimiento mensual de ${contract.contractType}`,
-              contractId: contract.id
+              rendimientoAmount: monthlyReturnAmount, // Ganancia del mes
+              balance: balance, // Capital + ganancia del mes
+              notes: `Rendimiento mensual ${monthCounter} de ${contract.contractType}`,
+              contractId: contract.id,
+              monthNumber: monthCounter // Número del mes del contrato
             };
 
             // Verificar si ya existe este rendimiento
             const existingResult = await RendimientosService.getRendimientosByUser(userId);
             if (existingResult.success && existingResult.data) {
-              const exists = existingResult.data.some(r => r.period === period && r.contractId === contract.id);
+              const exists = existingResult.data.some(r => r.period === period && r.contractId === contract.id && r.monthNumber === monthCounter);
               if (exists) {
                 // Mover al siguiente mes
                 currentDate.setMonth(currentDate.getMonth() + 1);
+                monthCounter++;
                 continue;
               }
             }
 
-            // Crear el rendimiento
+            // Crear el rendimiento mensual
             const result = await RendimientosService.createRendimiento(rendimientoData);
             if (result.success) {
               totalGenerated++;
@@ -75,6 +80,7 @@ export class RendimientoGenerator {
 
             // Mover al siguiente mes
             currentDate.setMonth(currentDate.getMonth() + 1);
+            monthCounter++;
           }
         }
       }
@@ -103,59 +109,64 @@ export class RendimientoGenerator {
       const contracts = contractsResult.data;
       let totalGenerated = 0;
 
-      for (const contract of contracts) {
-        // Generar rendimientos mensuales desde la fecha de inicio hasta hoy
-        const startDate = new Date(contract.startDate);
-        const endDate = new Date(contract.expirationDate);
-        const today = new Date();
+        for (const contract of contracts) {
+          // Generar rendimientos mensuales - cada mes es un contrato independiente
+          const startDate = new Date(contract.startDate);
+          const endDate = new Date(contract.expirationDate);
+          const today = new Date();
 
-        // Solo generar rendimientos para contratos que han comenzado
-        if (startDate > today) continue;
+          // Solo generar rendimientos para contratos que han comenzado
+          if (startDate > today) continue;
 
-        // Determinar la fecha final (menor entre fecha de vencimiento y hoy)
-        const finalDate = endDate < today ? endDate : today;
+          // Determinar la fecha final (menor entre fecha de vencimiento y hoy)
+          const finalDate = endDate < today ? endDate : today;
 
-        // Generar rendimientos mes por mes
-        let currentDate = new Date(startDate);
-        while (currentDate <= finalDate) {
-          const period = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+          // Generar rendimientos mes por mes - cada mes es un contrato mensual
+          let currentDate = new Date(startDate);
+          let monthCounter = 1;
           
-          // Calcular rendimiento mensual
-          const monthlyReturnAmount = (contract.investmentAmount * contract.monthlyReturn) / 100;
-          const balance = contract.investmentAmount + (monthlyReturnAmount * this.getMonthsDifference(startDate, currentDate));
+          while (currentDate <= finalDate) {
+            const period = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+            
+            // Para contratos mensuales, el capital se mantiene igual cada mes
+            const monthlyReturnAmount = (contract.investmentAmount * contract.monthlyReturn) / 100;
+            const balance = contract.investmentAmount + monthlyReturnAmount; // Balance mensual
 
-          const rendimientoData = {
-            userId: userId,
-            period: period,
-            capital: contract.investmentAmount,
-            rendimientoPercent: contract.monthlyReturn,
-            rendimientoAmount: monthlyReturnAmount,
-            balance: balance,
-            notes: `Rendimiento mensual de ${contract.contractType}`,
-            contractId: contract.id
-          };
+            const rendimientoData = {
+              userId: userId,
+              period: period,
+              capital: contract.investmentAmount, // Capital del mes
+              rendimientoPercent: contract.monthlyReturn,
+              rendimientoAmount: monthlyReturnAmount, // Ganancia del mes
+              balance: balance, // Capital + ganancia del mes
+              notes: `Rendimiento mensual ${monthCounter} de ${contract.contractType}`,
+              contractId: contract.id,
+              monthNumber: monthCounter // Número del mes del contrato
+            };
 
-          // Verificar si ya existe este rendimiento
-          const existingResult = await RendimientosService.getRendimientosByUser(userId);
-          if (existingResult.success && existingResult.data) {
-            const exists = existingResult.data.some(r => r.period === period && r.contractId === contract.id);
-            if (exists) {
-              // Mover al siguiente mes
-              currentDate.setMonth(currentDate.getMonth() + 1);
-              continue;
+            // Verificar si ya existe este rendimiento
+            const existingResult = await RendimientosService.getRendimientosByUser(userId);
+            if (existingResult.success && existingResult.data) {
+              const exists = existingResult.data.some(r => r.period === period && r.contractId === contract.id && r.monthNumber === monthCounter);
+              if (exists) {
+                // Mover al siguiente mes
+                currentDate.setMonth(currentDate.getMonth() + 1);
+                monthCounter++;
+                continue;
+              }
             }
-          }
 
-          // Crear el rendimiento
-          const result = await RendimientosService.createRendimiento(rendimientoData);
-          if (result.success) {
-            totalGenerated++;
-          }
+            // Crear el rendimiento mensual
+            const result = await RendimientosService.createRendimiento(rendimientoData);
+            if (result.success) {
+              totalGenerated++;
+            }
 
-          // Mover al siguiente mes
-          currentDate.setMonth(currentDate.getMonth() + 1);
+            // Mover al siguiente mes
+            currentDate.setMonth(currentDate.getMonth() + 1);
+            monthCounter++;
+          }
         }
-      }
 
       return { success: true, generated: totalGenerated };
     } catch (error: any) {

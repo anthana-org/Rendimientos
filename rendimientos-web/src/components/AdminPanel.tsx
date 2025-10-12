@@ -3,6 +3,7 @@ import { UserService } from '../services/userService';
 import { ContractService } from '../services/contractService';
 import { RendimientoGenerator } from '../services/rendimientoGenerator';
 import { RendimientosService } from '../services/rendimientosService';
+import * as XLSX from 'xlsx';
 
 interface User {
   uid: string;
@@ -30,19 +31,36 @@ export const AdminPanel: React.FC = () => {
   const [newContract, setNewContract] = useState({
     amount: '',
     startDate: '',
-    endDate: '',
+    duration: '1', // Duración en meses: 1, 3, 6, 9, 12
     status: 'active',
     rendimiento: ''
   });
+  
+  const [expiringContracts, setExpiringContracts] = useState<any[]>([]);
+  const [showExpiringAlert, setShowExpiringAlert] = useState(false);
+  const [showBulkUserUpload, setShowBulkUserUpload] = useState(false);
+  const [bulkUploadFile, setBulkUploadFile] = useState<File | null>(null);
+  const [bulkUploadProgress, setBulkUploadProgress] = useState<string>('');
 
   const [uploadedFiles, setUploadedFiles] = useState<{[key: string]: File[]}>({});
   const [selectedUserContracts, setSelectedUserContracts] = useState<any[]>([]);
   const [showUserContracts, setShowUserContracts] = useState(false);
   const [selectedContract, setSelectedContract] = useState<any>(null);
   const [showContractDetails, setShowContractDetails] = useState(false);
+  const [selectedUserData, setSelectedUserData] = useState<User | null>(null);
+  const [selectedUserRendimientos, setSelectedUserRendimientos] = useState<any[]>([]);
+  const [loadingRendimientos, setLoadingRendimientos] = useState(false);
 
   useEffect(() => {
     loadUsers();
+    checkExpiringContracts(); // Verificar contratos al cargar
+    
+    // Verificar contratos que expiran cada 5 minutos
+    const intervalId = setInterval(() => {
+      checkExpiringContracts();
+    }, 5 * 60 * 1000); // 5 minutos
+
+    return () => clearInterval(intervalId);
   }, []);
 
   useEffect(() => {
@@ -77,6 +95,38 @@ export const AdminPanel: React.FC = () => {
       setError('Error cargando usuarios');
     } finally {
       setLoadingUsers(false);
+    }
+  };
+
+  const checkExpiringContracts = async () => {
+    try {
+      const today = new Date();
+      const result = await ContractService.getAllContracts();
+      
+      if (result.success && result.data) {
+        const expiring = result.data.filter(contract => {
+          const expirationDate = new Date(contract.expirationDate);
+          const daysUntilExpiration = Math.ceil((expirationDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+          
+          // Alertar si falta 1 día o menos para que expire
+          return daysUntilExpiration <= 1 && daysUntilExpiration >= 0 && contract.status === 'active';
+        });
+        
+        if (expiring.length > 0) {
+          setExpiringContracts(expiring);
+          setShowExpiringAlert(true);
+          
+          // También actualizar estado de contratos vencidos
+          result.data.forEach(async (contract) => {
+            const expirationDate = new Date(contract.expirationDate);
+            if (expirationDate < today && contract.status === 'active') {
+              await ContractService.updateContractStatus(contract.id, 'expired');
+            }
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error verificando contratos que expiran:', err);
     }
   };
 
@@ -142,13 +192,44 @@ export const AdminPanel: React.FC = () => {
 
   const handleViewUserContracts = async (user: User) => {
     try {
-      const result = await ContractService.getContractsByUser(user.uid);
-      if (result.success && result.data) {
-        setSelectedUserContracts(result.data);
-        setShowUserContracts(true);
+      console.log('Cargando información completa para usuario:', user.uid, user.email);
+      setIsLoading(true);
+      setLoadingRendimientos(true);
+      setError(null);
+      setSelectedUserData(user);
+      
+      // Cargar contratos
+      const contractsResult = await ContractService.getContractsByUser(user.uid);
+      console.log('Resultado de contratos:', contractsResult);
+      
+      if (contractsResult.success && contractsResult.data) {
+        console.log('Contratos encontrados:', contractsResult.data.length);
+        setSelectedUserContracts(contractsResult.data);
+      } else {
+        console.error('No se encontraron contratos:', contractsResult.error);
+        setSelectedUserContracts([]);
       }
-    } catch (error) {
-      console.error('Error cargando contratos del usuario:', error);
+
+      // Cargar rendimientos
+      const rendimientosResult = await RendimientosService.getRendimientosByUser(user.uid);
+      console.log('Resultado de rendimientos:', rendimientosResult);
+      
+      if (rendimientosResult.success && rendimientosResult.data) {
+        console.log('Rendimientos encontrados:', rendimientosResult.data.length);
+        setSelectedUserRendimientos(rendimientosResult.data);
+      } else {
+        console.error('No se encontraron rendimientos:', rendimientosResult.error);
+        setSelectedUserRendimientos([]);
+      }
+
+      setShowUserContracts(true);
+      
+    } catch (error: any) {
+      console.error('Error cargando información del usuario:', error);
+      setError(`Error al cargar información: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+      setLoadingRendimientos(false);
     }
   };
 
@@ -165,7 +246,7 @@ export const AdminPanel: React.FC = () => {
       return;
     }
 
-    if (!newContract.amount || !newContract.startDate || !newContract.endDate || !newContract.rendimiento) {
+    if (!newContract.amount || !newContract.startDate || !newContract.duration || !newContract.rendimiento) {
       setError('Todos los campos son requeridos');
       return;
     }
@@ -180,16 +261,17 @@ export const AdminPanel: React.FC = () => {
       return;
     }
 
-    if (new Date(newContract.startDate) >= new Date(newContract.endDate)) {
-      setError('La fecha de fin debe ser posterior a la fecha de inicio');
-      return;
-    }
-
     setIsLoading(true);
     setError(null);
     setSuccess(null);
 
     try {
+      // Calcular fecha de fin basada en la duración en meses
+      const startDate = new Date(newContract.startDate);
+      const durationMonths = parseInt(newContract.duration);
+      const endDate = new Date(startDate);
+      endDate.setMonth(endDate.getMonth() + durationMonths);
+
       // Crear contratos en Firebase para cada usuario seleccionado
       let successCount = 0;
       let errorCount = 0;
@@ -202,13 +284,14 @@ export const AdminPanel: React.FC = () => {
         const contractData = {
           userId: userId,
           userEmail: user.email,
-          contractType: 'Inversión Mensual',
+          contractType: `Inversión ${durationMonths} ${durationMonths === 1 ? 'Mes' : 'Meses'}`,
           startDate: newContract.startDate,
-          expirationDate: newContract.endDate,
+          expirationDate: endDate.toISOString().split('T')[0],
           investmentAmount: parseFloat(newContract.amount),
           monthlyReturn: parseFloat(newContract.rendimiento),
           status: newContract.status as 'active' | 'inactive' | 'expired',
-          lastNotification: ''
+          lastNotification: '',
+          contractDuration: durationMonths
         };
 
         const result = await ContractService.createContract(contractData);
@@ -271,6 +354,92 @@ export const AdminPanel: React.FC = () => {
     }));
   };
 
+  const handleBulkUploadFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setBulkUploadFile(file);
+    }
+  };
+
+  const handleBulkUserUpload = async () => {
+    if (!bulkUploadFile) {
+      setError('Por favor selecciona un archivo');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    setSuccess(null);
+    setBulkUploadProgress('Leyendo archivo...');
+
+    try {
+      const data = await bulkUploadFile.arrayBuffer();
+      const workbook = XLSX.read(data, { type: 'array' });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
+
+      setBulkUploadProgress(`Procesando ${jsonData.length} usuarios...`);
+
+      let successCount = 0;
+      let errorCount = 0;
+      const errors: string[] = [];
+
+      for (let i = 0; i < jsonData.length; i++) {
+        const row = jsonData[i];
+        const email = row.email || row.Email || row.EMAIL || row.correo || row.Correo;
+        const password = row.password || row.Password || row.PASSWORD || row.contraseña || row.Contraseña;
+
+        if (!email || !password) {
+          errorCount++;
+          errors.push(`Fila ${i + 2}: Email o contraseña faltante`);
+          continue;
+        }
+
+        if (password.length < 6) {
+          errorCount++;
+          errors.push(`Fila ${i + 2}: La contraseña debe tener al menos 6 caracteres`);
+          continue;
+        }
+
+        setBulkUploadProgress(`Creando usuario ${i + 1}/${jsonData.length}: ${email}`);
+
+        try {
+          await UserService.createUser(email, password);
+          successCount++;
+        } catch (err: any) {
+          errorCount++;
+          errors.push(`${email}: ${err.message}`);
+        }
+
+        // Pequeña pausa para no saturar Firebase
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+
+      setBulkUploadProgress('');
+      
+      if (successCount > 0) {
+        setSuccess(`✅ ${successCount} usuarios creados exitosamente${errorCount > 0 ? `. ${errorCount} errores.` : ''}`);
+        loadUsers(); // Recargar lista
+      }
+      
+      if (errorCount > 0 && errorCount === jsonData.length) {
+        setError(`❌ No se pudo crear ningún usuario. Errores: ${errors.slice(0, 3).join(', ')}${errors.length > 3 ? '...' : ''}`);
+      }
+
+      setBulkUploadFile(null);
+      setTimeout(() => {
+        setShowBulkUserUpload(false);
+      }, 3000);
+
+    } catch (err: any) {
+      setError(`Error procesando archivo: ${err.message}`);
+      setBulkUploadProgress('');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const initializeContracts = async (force = false) => {
     if (users.length === 0) {
       console.log('No hay usuarios para crear contratos');
@@ -294,6 +463,7 @@ export const AdminPanel: React.FC = () => {
 
       console.log('Creando 20 contratos por cada usuario...');
       let totalCreated = 0;
+      const durations = [1, 3, 6, 9, 12]; // Duraciones predefinidas en meses
       
       // Generar 20 contratos por cada usuario
       for (const user of users) {
@@ -302,7 +472,11 @@ export const AdminPanel: React.FC = () => {
           // Fechas aleatorias en los últimos 12 meses
           const now = new Date();
           const startDate = new Date(now.getTime() - Math.random() * 365 * 24 * 60 * 60 * 1000);
-          const endDate = new Date(startDate.getTime() + (30 + Math.random() * 330) * 24 * 60 * 60 * 1000);
+          
+          // Seleccionar duración aleatoria de las predefinidas
+          const duration = durations[Math.floor(Math.random() * durations.length)];
+          const endDate = new Date(startDate);
+          endDate.setMonth(endDate.getMonth() + duration);
 
           // Montos aleatorios entre $10,000 y $500,000
           const amount = 10000 + Math.random() * 490000;
@@ -313,13 +487,14 @@ export const AdminPanel: React.FC = () => {
           const contractData = {
             userId: user.uid,
             userEmail: user.email,
-            contractType: `Inversión ${i}`,
+            contractType: `Inversión ${duration} ${duration === 1 ? 'Mes' : 'Meses'}`,
             startDate: startDate.toISOString().split('T')[0],
             expirationDate: endDate.toISOString().split('T')[0],
             investmentAmount: Math.round(amount),
             monthlyReturn: parseFloat(rendimiento.toFixed(2)),
             status: 'active' as const,
-            lastNotification: ''
+            lastNotification: '',
+            contractDuration: duration
           };
 
           const result = await ContractService.createContract(contractData);
@@ -343,12 +518,23 @@ export const AdminPanel: React.FC = () => {
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-white">Panel de Administración</h1>
-          <button
-            onClick={() => setShowCreateUser(true)}
-            className="px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:shadow-lg hover:scale-105 transition-all duration-300 font-semibold"
-          >
-            Crear Usuario
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowBulkUserUpload(true)}
+              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:shadow-lg hover:scale-105 transition-all duration-300 font-semibold flex items-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+              Carga Masiva
+            </button>
+            <button
+              onClick={() => setShowCreateUser(true)}
+              className="px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:shadow-lg hover:scale-105 transition-all duration-300 font-semibold"
+            >
+              Crear Usuario
+            </button>
+          </div>
         </div>
 
         {/* Users List */}
@@ -423,9 +609,11 @@ export const AdminPanel: React.FC = () => {
                         </div>
                         <div>
                           <p className="text-white font-medium">{user.email}</p>
-                          <p className="text-gray-400 text-sm">
-                            Creado: {new Date(user.createdAt).toLocaleDateString('es-MX')}
-                          </p>
+                          {user.createdAt && (
+                            <p className="text-gray-400 text-sm">
+                              Creado: {new Date(user.createdAt).toLocaleDateString('es-MX')}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center space-x-3">
@@ -573,16 +761,31 @@ export const AdminPanel: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Fecha de Fin
+                  Duración del Contrato
                 </label>
-                <input
-                  type="date"
-                  name="endDate"
-                  value={newContract.endDate}
+                <select
+                  name="duration"
+                  value={newContract.duration}
                   onChange={handleContractInputChange}
                   required
                   className="w-full px-4 py-2 bg-gray-800 border border-gray-600 text-white rounded-lg"
-                />
+                >
+                  <option value="1">1 Mes</option>
+                  <option value="3">3 Meses</option>
+                  <option value="6">6 Meses</option>
+                  <option value="9">9 Meses</option>
+                  <option value="12">12 Meses</option>
+                </select>
+                <p className="text-gray-400 text-xs mt-1">
+                  {newContract.startDate && (
+                    <>Fecha de vencimiento: {(() => {
+                      const start = new Date(newContract.startDate);
+                      const end = new Date(start);
+                      end.setMonth(end.getMonth() + parseInt(newContract.duration || '1'));
+                      return end.toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+                    })()}</>
+                  )}
+                </p>
               </div>
 
               <div>
@@ -695,18 +898,31 @@ export const AdminPanel: React.FC = () => {
         </div>
       )}
 
-      {/* User Contracts Modal */}
-      {showUserContracts && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl shadow-2xl border border-gray-700 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-700">
+      {/* User Complete History Modal */}
+      {showUserContracts && selectedUserData && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl shadow-2xl border border-gray-700 w-full max-w-7xl my-8">
+            {/* Header */}
+            <div className="p-6 border-b border-gray-700 bg-gradient-to-r from-green-900/20 to-blue-900/20">
               <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-2xl font-bold text-white">Historial de Contratos</h2>
-                  <p className="text-gray-400">Contratos del usuario</p>
+                <div className="flex items-center space-x-4">
+                  <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-green-600 rounded-full flex items-center justify-center">
+                    <span className="text-white font-bold text-2xl">
+                      {selectedUserData.email.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <h2 className="text-3xl font-bold text-white">{selectedUserData.email}</h2>
+                    <p className="text-gray-400">ID: {selectedUserData.uid}</p>
+                  </div>
                 </div>
                 <button
-                  onClick={() => setShowUserContracts(false)}
+                  onClick={() => {
+                    setShowUserContracts(false);
+                    setSelectedUserData(null);
+                    setSelectedUserContracts([]);
+                    setSelectedUserRendimientos([]);
+                  }}
                   className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -716,75 +932,142 @@ export const AdminPanel: React.FC = () => {
               </div>
             </div>
             
-            <div className="p-6">
-              {selectedUserContracts.length > 0 ? (
-                <div className="space-y-4">
-                  {selectedUserContracts.map((contract, index) => (
-                    <div key={index} className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-4 border border-gray-700 hover:border-green-500/30 transition-all duration-300">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-3 mb-3">
-                            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
-                              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                              </svg>
-                            </div>
-                            <div>
-                              <p className="text-white font-semibold">{contract.contractType}</p>
-                              <p className="text-gray-400 text-sm">ID: {contract.id}</p>
-                            </div>
-                          </div>
-                          
-                          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                            <div className="bg-gray-700/50 rounded-lg p-3">
-                              <p className="text-gray-400 text-xs">Monto Inicial</p>
-                              <p className="text-white font-bold">${contract.investmentAmount?.toLocaleString() || 'N/A'}</p>
-                            </div>
-                            <div className="bg-gray-700/50 rounded-lg p-3">
-                              <p className="text-gray-400 text-xs">Rendimiento</p>
-                              <p className="text-green-400 font-bold">{contract.monthlyReturn || 0}%</p>
-                            </div>
-                            <div className="bg-gray-700/50 rounded-lg p-3">
-                              <p className="text-gray-400 text-xs">Inicio</p>
-                              <p className="text-white font-bold">{contract.startDate}</p>
-                            </div>
-                            <div className="bg-gray-700/50 rounded-lg p-3">
-                              <p className="text-gray-400 text-xs">Vencimiento</p>
-                              <p className="text-white font-bold">{contract.expirationDate}</p>
-                            </div>
-                          </div>
+            <div className="p-6 space-y-6 max-h-[calc(90vh-120px)] overflow-y-auto">
+              {/* Resumen General */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-gradient-to-br from-green-900/30 to-green-800/30 rounded-xl p-4 border border-green-500/30">
+                  <p className="text-green-400 text-sm font-medium mb-1">Total Invertido</p>
+                  <p className="text-white text-2xl font-bold">
+                    ${selectedUserContracts.reduce((sum, c) => sum + (c.investmentAmount || 0), 0).toLocaleString()}
+                  </p>
+                </div>
+                <div className="bg-gradient-to-br from-blue-900/30 to-blue-800/30 rounded-xl p-4 border border-blue-500/30">
+                  <p className="text-blue-400 text-sm font-medium mb-1">Contratos Activos</p>
+                  <p className="text-white text-2xl font-bold">
+                    {selectedUserContracts.filter(c => c.status === 'active').length}
+                  </p>
+                </div>
+                <div className="bg-gradient-to-br from-purple-900/30 to-purple-800/30 rounded-xl p-4 border border-purple-500/30">
+                  <p className="text-purple-400 text-sm font-medium mb-1">Rendimientos Generados</p>
+                  <p className="text-white text-2xl font-bold">
+                    {selectedUserRendimientos.length}
+                  </p>
+                </div>
+              </div>
 
-                          <div className="flex items-center justify-between">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              contract.status === 'active' ? 'bg-green-500/20 text-green-400' :
-                              contract.status === 'inactive' ? 'bg-gray-500/20 text-gray-400' :
-                              'bg-red-500/20 text-red-400'
-                            }`}>
-                              {contract.status === 'active' ? 'Activo' : 
-                               contract.status === 'inactive' ? 'Inactivo' : 'Vencido'}
-                            </span>
-                            <button
-                              onClick={() => handleViewContractDetails(contract)}
-                              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
-                            >
-                              Ver Detalles
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
+              {/* Tabla de Contratos */}
+              <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
+                <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                  <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Contratos ({selectedUserContracts.length})
+                </h3>
+                
+                {selectedUserContracts.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-gray-700">
+                          <th className="text-left py-3 px-4 text-gray-400 font-medium">Tipo</th>
+                          <th className="text-left py-3 px-4 text-gray-400 font-medium">Monto</th>
+                          <th className="text-left py-3 px-4 text-gray-400 font-medium">Rendimiento</th>
+                          <th className="text-left py-3 px-4 text-gray-400 font-medium">Inicio</th>
+                          <th className="text-left py-3 px-4 text-gray-400 font-medium">Vencimiento</th>
+                          <th className="text-left py-3 px-4 text-gray-400 font-medium">Estado</th>
+                          <th className="text-left py-3 px-4 text-gray-400 font-medium">Acción</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedUserContracts.map((contract) => (
+                          <tr key={contract.id} className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors">
+                            <td className="py-3 px-4 text-white font-medium">{contract.contractType}</td>
+                            <td className="py-3 px-4 text-white">${contract.investmentAmount?.toLocaleString() || 'N/A'}</td>
+                            <td className="py-3 px-4 text-green-400 font-bold">{contract.monthlyReturn || 0}%</td>
+                            <td className="py-3 px-4 text-gray-300 text-sm">{contract.startDate}</td>
+                            <td className="py-3 px-4 text-gray-300 text-sm">{contract.expirationDate}</td>
+                            <td className="py-3 px-4">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                contract.status === 'active' ? 'bg-green-500/20 text-green-400' :
+                                contract.status === 'inactive' ? 'bg-gray-500/20 text-gray-400' :
+                                'bg-red-500/20 text-red-400'
+                              }`}>
+                                {contract.status === 'active' ? 'Activo' : 
+                                 contract.status === 'inactive' ? 'Inactivo' : 'Vencido'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <button
+                                onClick={() => handleViewContractDetails(contract)}
+                                className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                              >
+                                Ver PDFs
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                  <p className="text-gray-400 text-lg">No hay contratos registrados</p>
-                </div>
-              )}
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-gray-400">No hay contratos registrados</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Tabla de Rendimientos */}
+              <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
+                <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                  <svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                  </svg>
+                  Rendimientos Históricos ({selectedUserRendimientos.length})
+                </h3>
+                
+                {loadingRendimientos ? (
+                  <div className="text-center py-8">
+                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-700 border-t-green-500"></div>
+                    <p className="text-gray-400 mt-2">Cargando rendimientos...</p>
+                  </div>
+                ) : selectedUserRendimientos.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-gray-700">
+                          <th className="text-left py-3 px-4 text-gray-400 font-medium">Período</th>
+                          <th className="text-left py-3 px-4 text-gray-400 font-medium">Capital</th>
+                          <th className="text-left py-3 px-4 text-gray-400 font-medium">Rendimiento %</th>
+                          <th className="text-left py-3 px-4 text-gray-400 font-medium">Ganancia</th>
+                          <th className="text-left py-3 px-4 text-gray-400 font-medium">Balance Final</th>
+                          <th className="text-left py-3 px-4 text-gray-400 font-medium">Notas</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedUserRendimientos.slice(0, 20).map((rendimiento, index) => (
+                          <tr key={index} className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors">
+                            <td className="py-3 px-4 text-white font-medium">{rendimiento.period}</td>
+                            <td className="py-3 px-4 text-white">${rendimiento.capital?.toLocaleString() || 'N/A'}</td>
+                            <td className="py-3 px-4 text-blue-400 font-bold">{rendimiento.rendimientoPercent || 0}%</td>
+                            <td className="py-3 px-4 text-green-400 font-bold">+${rendimiento.rendimientoAmount?.toLocaleString() || 'N/A'}</td>
+                            <td className="py-3 px-4 text-white font-bold">${rendimiento.balance?.toLocaleString() || 'N/A'}</td>
+                            <td className="py-3 px-4 text-gray-400 text-sm">{rendimiento.notes || '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {selectedUserRendimientos.length > 20 && (
+                      <p className="text-gray-400 text-sm mt-3 text-center">
+                        Mostrando 20 de {selectedUserRendimientos.length} rendimientos
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-gray-400">No hay rendimientos generados aún</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -907,6 +1190,188 @@ export const AdminPanel: React.FC = () => {
                   Cerrar
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk User Upload Modal */}
+      {showBulkUserUpload && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 rounded-xl border border-gray-700 w-full max-w-2xl">
+            <div className="p-6 border-b border-gray-700">
+              <h2 className="text-xl font-bold text-white">Carga Masiva de Usuarios</h2>
+              <p className="text-gray-400 text-sm mt-1">
+                Sube un archivo Excel (.xls, .xlsx) con las columnas: email, password
+              </p>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              {error && (
+                <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-3 rounded-lg text-sm">
+                  {error}
+                </div>
+              )}
+              
+              {success && (
+                <div className="bg-green-500/10 border border-green-500/30 text-green-400 p-3 rounded-lg text-sm">
+                  {success}
+                </div>
+              )}
+
+              {bulkUploadProgress && (
+                <div className="bg-blue-500/10 border border-blue-500/30 text-blue-400 p-3 rounded-lg text-sm flex items-center gap-3">
+                  <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  {bulkUploadProgress}
+                </div>
+              )}
+
+              {/* Formato de ejemplo */}
+              <div className="bg-gray-800/50 rounded-lg p-4">
+                <h3 className="text-sm font-semibold text-white mb-2">Formato del archivo Excel:</h3>
+                <div className="bg-black/50 rounded p-3 font-mono text-xs text-gray-300">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-700">
+                        <th className="text-left pb-2">email</th>
+                        <th className="text-left pb-2 pl-4">password</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className="pt-2">usuario1@ejemplo.com</td>
+                        <td className="pt-2 pl-4">password123</td>
+                      </tr>
+                      <tr>
+                        <td>usuario2@ejemplo.com</td>
+                        <td className="pl-4">password456</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-gray-400 text-xs mt-2">
+                  * La contraseña debe tener al menos 6 caracteres
+                </p>
+              </div>
+
+              {/* File Upload */}
+              <div className="border-2 border-dashed border-gray-600 rounded-lg p-6 text-center hover:border-blue-500 transition-colors">
+                <input
+                  type="file"
+                  accept=".xls,.xlsx"
+                  onChange={handleBulkUploadFile}
+                  className="hidden"
+                  id="bulk-upload-input"
+                  disabled={isLoading}
+                />
+                <label htmlFor="bulk-upload-input" className="cursor-pointer">
+                  <svg className="w-12 h-12 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                  <p className="text-gray-400 mb-2">
+                    {bulkUploadFile ? bulkUploadFile.name : 'Haz clic para seleccionar archivo'}
+                  </p>
+                  <p className="text-gray-500 text-sm">
+                    Archivos soportados: .xls, .xlsx
+                  </p>
+                </label>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={handleBulkUserUpload}
+                  disabled={isLoading || !bulkUploadFile}
+                  className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors font-semibold"
+                >
+                  {isLoading ? 'Procesando...' : 'Subir Usuarios'}
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowBulkUserUpload(false);
+                    setBulkUploadFile(null);
+                    setBulkUploadProgress('');
+                    setError(null);
+                    setSuccess(null);
+                  }}
+                  disabled={isLoading}
+                  className="flex-1 px-4 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:bg-gray-700 disabled:cursor-not-allowed transition-colors font-semibold"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Alert Modal - Contratos por Expirar */}
+      {showExpiringAlert && expiringContracts.length > 0 && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+          <div className="bg-gradient-to-br from-red-900/90 to-gray-900/90 rounded-xl border-2 border-red-500/50 w-full max-w-2xl shadow-2xl">
+            <div className="p-6 border-b border-red-500/30">
+              <div className="flex items-center space-x-3">
+                <svg className="w-8 h-8 text-red-400 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <h2 className="text-2xl font-bold text-white">⚠️ Alerta de Contratos</h2>
+              </div>
+              <p className="text-red-200 mt-2">
+                {expiringContracts.length} contrato{expiringContracts.length > 1 ? 's están' : ' está'} próximo{expiringContracts.length > 1 ? 's' : ''} a vencer
+              </p>
+            </div>
+            
+            <div className="p-6 space-y-4 max-h-96 overflow-y-auto">
+              {expiringContracts.map((contract) => (
+                <div key={contract.id} className="bg-black/30 backdrop-blur-sm rounded-lg border border-red-500/30 p-4 hover:border-red-400/50 transition-all">
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-2 flex-1">
+                      <div className="flex items-center space-x-2">
+                        <span className="px-3 py-1 bg-red-500/20 text-red-300 rounded-full text-xs font-bold border border-red-500/30">
+                          ⏰ {contract.remainingDays} día{contract.remainingDays !== 1 ? 's' : ''} restante{contract.remainingDays !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      <p className="text-white font-semibold text-lg">{contract.userEmail}</p>
+                      <p className="text-gray-300 text-sm">
+                        <span className="text-gray-400">Contrato:</span> {contract.contractType}
+                      </p>
+                      <div className="grid grid-cols-2 gap-3 mt-2">
+                        <div>
+                          <p className="text-gray-400 text-xs">Monto</p>
+                          <p className="text-green-400 font-semibold">${contract.investmentAmount.toLocaleString()}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-400 text-xs">Vence el</p>
+                          <p className="text-red-300 font-semibold">{new Date(contract.expirationDate).toLocaleDateString('es-MX')}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="p-6 border-t border-red-500/30 flex gap-3">
+              <button
+                onClick={() => setShowExpiringAlert(false)}
+                className="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold"
+              >
+                Entendido
+              </button>
+              <button
+                onClick={() => {
+                  setShowExpiringAlert(false);
+                  // Recargar en 5 minutos
+                  setTimeout(() => checkExpiringContracts(), 5 * 60 * 1000);
+                }}
+                className="flex-1 px-6 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors font-semibold"
+              >
+                Recordar en 5 min
+              </button>
             </div>
           </div>
         </div>
