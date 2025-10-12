@@ -166,12 +166,12 @@ export default function LoginMinimal() {
                   boxSizing: 'border-box'
                 }}
                 onFocus={(e) => {
-                  e.target.style.borderColor = '#22c55e';
-                  e.target.style.boxShadow = '0 0 0 2px rgba(34, 197, 94, 0.2)';
+                  (e.target as HTMLButtonElement).style.borderColor = '#22c55e';
+                  (e.target as HTMLButtonElement).style.boxShadow = '0 0 0 2px rgba(34, 197, 94, 0.2)';
                 }}
                 onBlur={(e) => {
-                  e.target.style.borderColor = '#4b5563';
-                  e.target.style.boxShadow = 'none';
+                  (e.target as HTMLButtonElement).style.borderColor = '#4b5563';
+                  (e.target as HTMLButtonElement).style.boxShadow = 'none';
                 }}
               />
               <div style={{
@@ -220,12 +220,12 @@ export default function LoginMinimal() {
                   boxSizing: 'border-box'
                 }}
                 onFocus={(e) => {
-                  e.target.style.borderColor = '#22c55e';
-                  e.target.style.boxShadow = '0 0 0 2px rgba(34, 197, 94, 0.2)';
+                  (e.target as HTMLButtonElement).style.borderColor = '#22c55e';
+                  (e.target as HTMLButtonElement).style.boxShadow = '0 0 0 2px rgba(34, 197, 94, 0.2)';
                 }}
                 onBlur={(e) => {
-                  e.target.style.borderColor = '#4b5563';
-                  e.target.style.boxShadow = 'none';
+                  (e.target as HTMLButtonElement).style.borderColor = '#4b5563';
+                  (e.target as HTMLButtonElement).style.boxShadow = 'none';
                 }}
               />
               <div style={{
@@ -289,16 +289,16 @@ export default function LoginMinimal() {
             }}
             onMouseOver={(e) => {
               if (!loading) {
-                e.target.style.background = 'linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%)';
-                e.target.style.transform = 'translateY(-2px)';
-                e.target.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.3)';
+                (e.target as HTMLButtonElement).style.background = 'linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%)';
+                (e.target as HTMLButtonElement).style.transform = 'translateY(-2px)';
+                (e.target as HTMLButtonElement).style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.3)';
               }
             }}
             onMouseOut={(e) => {
               if (!loading) {
-                e.target.style.background = 'linear-gradient(135deg, #d1d5db 0%, #9ca3af 100%)';
-                e.target.style.transform = 'translateY(0)';
-                e.target.style.boxShadow = 'none';
+                (e.target as HTMLButtonElement).style.background = 'linear-gradient(135deg, #d1d5db 0%, #9ca3af 100%)';
+                (e.target as HTMLButtonElement).style.transform = 'translateY(0)';
+                (e.target as HTMLButtonElement).style.boxShadow = 'none';
               }
             }}
           >
@@ -348,8 +348,8 @@ export default function LoginMinimal() {
               transition: 'color 0.2s',
               fontWeight: '500'
             }}
-            onMouseOver={(e) => e.target.style.color = '#22c55e'}
-            onMouseOut={(e) => e.target.style.color = '#9ca3af'}
+            onMouseOver={(e) => (e.target as HTMLButtonElement).style.color = '#22c55e'}
+            onMouseOut={(e) => (e.target as HTMLButtonElement).style.color = '#9ca3af'}
           >
             {isRegistering ? '¿Ya tienes cuenta? ' : '¿No tienes cuenta? '}
             <span style={{
@@ -357,8 +357,8 @@ export default function LoginMinimal() {
               fontWeight: '600',
               cursor: 'pointer'
             }}
-            onMouseOver={(e) => e.target.style.color = '#16a34a'}
-            onMouseOut={(e) => e.target.style.color = '#22c55e'}
+            onMouseOver={(e) => (e.target as HTMLButtonElement).style.color = '#16a34a'}
+            onMouseOut={(e) => (e.target as HTMLButtonElement).style.color = '#22c55e'}
             >
               {isRegistering ? 'Iniciar Sesión' : 'Crear una'}
             </span>
@@ -388,8 +388,8 @@ export default function LoginMinimal() {
               textDecoration: 'none',
               transition: 'color 0.2s'
             }}
-            onMouseOver={(e) => e.target.style.color = '#22c55e'}
-            onMouseOut={(e) => e.target.style.color = '#9ca3af'}
+            onMouseOver={(e) => (e.target as HTMLButtonElement).style.color = '#22c55e'}
+            onMouseOut={(e) => (e.target as HTMLButtonElement).style.color = '#9ca3af'}
             >
               Términos
             </a>
@@ -400,8 +400,8 @@ export default function LoginMinimal() {
               textDecoration: 'none',
               transition: 'color 0.2s'
             }}
-            onMouseOver={(e) => e.target.style.color = '#22c55e'}
-            onMouseOut={(e) => e.target.style.color = '#9ca3af'}
+            onMouseOver={(e) => (e.target as HTMLButtonElement).style.color = '#22c55e'}
+            onMouseOut={(e) => (e.target as HTMLButtonElement).style.color = '#9ca3af'}
             >
               Privacidad
             </a>
@@ -412,8 +412,8 @@ export default function LoginMinimal() {
               textDecoration: 'none',
               transition: 'color 0.2s'
             }}
-            onMouseOver={(e) => e.target.style.color = '#22c55e'}
-            onMouseOut={(e) => e.target.style.color = '#9ca3af'}
+            onMouseOver={(e) => (e.target as HTMLButtonElement).style.color = '#22c55e'}
+            onMouseOut={(e) => (e.target as HTMLButtonElement).style.color = '#9ca3af'}
             >
               Soporte
             </a>

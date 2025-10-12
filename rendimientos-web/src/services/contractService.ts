@@ -1,5 +1,5 @@
 import { db } from '../firebase';
-import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, getDoc, query, where, orderBy, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, getDoc, query, where, serverTimestamp } from 'firebase/firestore';
 
 export interface ContractData {
   id?: string;

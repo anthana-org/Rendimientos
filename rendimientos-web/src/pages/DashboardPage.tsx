@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { ContractService } from '../services/contractService';
-import { RendimientosService } from '../services/rendimientosService';
 import { PerformanceChart } from '../components/PerformanceChart';
 
 interface Contract {
@@ -20,6 +19,9 @@ interface Rendimiento {
   rendimientoAmount: number;
   balance: number;
   rendimientoPercent: number;
+  contractType?: string;
+  monthlyReturn?: number;
+  monthsElapsed?: number;
 }
 
 export default function DashboardPage() {
@@ -27,7 +29,6 @@ export default function DashboardPage() {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [rendimientos, setRendimientos] = useState<Rendimiento[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedPeriod, setSelectedPeriod] = useState('6M');
   const [totalBalance, setTotalBalance] = useState(0);
   const [totalInvested, setTotalInvested] = useState(0);
   const [monthlyGains, setMonthlyGains] = useState(0);
@@ -79,7 +80,6 @@ export default function DashboardPage() {
         setTotalInvested(totalInv);
         
         // Calcular balance total con rendimientos
-        let totalBal = totalInv;
         let totalGains = 0;
         
         active.forEach(contract => {
@@ -102,7 +102,7 @@ export default function DashboardPage() {
         // Preparar datos para la gráfica
         const chartData = active
           .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
-          .map((contract, index) => {
+          .map((contract) => {
             const startDate = new Date(contract.startDate);
             const now = new Date();
             const monthsElapsed = Math.max(1, Math.ceil(
@@ -118,6 +118,7 @@ export default function DashboardPage() {
               capital: contract.investmentAmount,
               rendimientoAmount: totalGain,
               balance: contract.investmentAmount + totalGain,
+              rendimientoPercent: monthlyReturn,
               contractType: contract.contractType,
               monthlyReturn: monthlyReturn,
               monthsElapsed: monthsElapsed
