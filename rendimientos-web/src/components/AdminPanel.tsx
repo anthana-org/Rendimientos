@@ -50,6 +50,9 @@ export const AdminPanel: React.FC = () => {
   const [selectedUserData, setSelectedUserData] = useState<User | null>(null);
   const [selectedUserRendimientos, setSelectedUserRendimientos] = useState<any[]>([]);
   const [loadingRendimientos, setLoadingRendimientos] = useState(false);
+  const [initializingContracts, setInitializingContracts] = useState(false);
+  const [contractProgress, setContractProgress] = useState({ current: 0, total: 0, message: '' });
+  const [deletingContracts, setDeletingContracts] = useState(false);
 
   useEffect(() => {
     loadUsers();
@@ -63,23 +66,24 @@ export const AdminPanel: React.FC = () => {
     return () => clearInterval(intervalId);
   }, []);
 
-  useEffect(() => {
-    if (users.length > 0) {
-      console.log('Usuarios cargados, iniciando generación de contratos...');
-      initializeContracts().then(() => {
-        console.log('Contratos inicializados, generando rendimientos...');
-        // Después de crear contratos, generar rendimientos
-        RendimientoGenerator.generateRendimientosForAllUsers().then(result => {
-          console.log('Resultado de generación de rendimientos:', result);
-          if (result.success && result.generated && result.generated > 0) {
-            console.log(`✅ Generados ${result.generated} rendimientos automáticamente`);
-          } else {
-            console.log('⚠️ No se generaron rendimientos:', result.error);
-          }
-        });
-      });
-    }
-  }, [users]);
+  // Comentado para evitar crear contratos automáticamente y exceder la cuota de Firebase
+  // useEffect(() => {
+  //   if (users.length > 0) {
+  //     console.log('Usuarios cargados, iniciando generación de contratos...');
+  //     initializeContracts().then(() => {
+  //       console.log('Contratos inicializados, generando rendimientos...');
+  //       // Después de crear contratos, generar rendimientos
+  //       RendimientoGenerator.generateRendimientosForAllUsers().then(result => {
+  //         console.log('Resultado de generación de rendimientos:', result);
+  //         if (result.success && result.generated && result.generated > 0) {
+  //           console.log(`✅ Generados ${result.generated} rendimientos automáticamente`);
+  //         } else {
+  //           console.log('⚠️ No se generaron rendimientos:', result.error);
+  //         }
+  //       });
+  //     });
+  //   }
+  // }, [users]);
 
   const loadUsers = async () => {
     try {
@@ -440,6 +444,59 @@ export const AdminPanel: React.FC = () => {
     }
   };
 
+  const deleteAllContracts = async () => {
+    if (!window.confirm('⚠️ ¿Estás seguro de que quieres eliminar TODOS los contratos? Esta acción no se puede deshacer.')) {
+      return;
+    }
+
+    try {
+      setDeletingContracts(true);
+      setContractProgress({ current: 0, total: 0, message: 'Eliminando todos los contratos...' });
+
+      const result = await ContractService.getAllContracts();
+      
+      if (result.success && result.data) {
+        const totalContracts = result.data.length;
+        setContractProgress({ current: 0, total: totalContracts, message: 'Eliminando contratos...' });
+        
+        let deleted = 0;
+        for (const contract of result.data) {
+          try {
+            await ContractService.deleteContract(contract.id);
+            deleted++;
+            setContractProgress({ 
+              current: deleted, 
+              total: totalContracts, 
+              message: `Eliminado ${deleted}/${totalContracts} contratos` 
+            });
+            // Pausa para no saturar
+            await new Promise(resolve => setTimeout(resolve, 200));
+          } catch (err) {
+            console.error('Error eliminando contrato:', err);
+          }
+        }
+        
+        setContractProgress({ 
+          current: deleted, 
+          total: totalContracts, 
+          message: `✅ ${deleted} contratos eliminados` 
+        });
+        
+        setTimeout(() => {
+          setContractProgress({ current: 0, total: 0, message: '' });
+          setDeletingContracts(false);
+        }, 3000);
+      }
+    } catch (err: any) {
+      console.error('Error eliminando contratos:', err);
+      setContractProgress({ current: 0, total: 0, message: `❌ Error: ${err.message}` });
+      setTimeout(() => {
+        setContractProgress({ current: 0, total: 0, message: '' });
+        setDeletingContracts(false);
+      }, 5000);
+    }
+  };
+
   const initializeContracts = async (force = false) => {
     if (users.length === 0) {
       console.log('No hay usuarios para crear contratos');
@@ -449,26 +506,41 @@ export const AdminPanel: React.FC = () => {
     try {
       if (!force) {
         console.log(`Verificando contratos existentes para ${users.length} usuarios...`);
+        setContractProgress({ current: 0, total: 0, message: 'Verificando contratos existentes...' });
+        
         // Verificar si ya existen contratos para evitar duplicados
         const contractsResult = await ContractService.getAllContracts();
         console.log('Contratos existentes:', contractsResult.data?.length || 0);
         
         if (contractsResult.success && contractsResult.data && contractsResult.data.length > 0) {
           console.log('Ya existen contratos, no se crearán más');
+          setContractProgress({ current: 0, total: 0, message: '' });
           return; // Ya hay contratos, no crear más
         }
       } else {
         console.log('Modo forzado: creando contratos sin verificar existentes');
       }
 
-      console.log('Creando 20 contratos por cada usuario...');
+      setInitializingContracts(true);
+      const contractsPerUser = 5; // Reducido de 20 a 5 para evitar exceder cuota
+      const totalContracts = users.length * contractsPerUser;
+      setContractProgress({ current: 0, total: totalContracts, message: 'Iniciando creación de contratos...' });
+      
+      console.log(`Creando ${contractsPerUser} contratos por cada usuario...`);
       let totalCreated = 0;
       const durations = [1, 3, 6, 9, 12]; // Duraciones predefinidas en meses
       
-      // Generar 20 contratos por cada usuario
-      for (const user of users) {
+      // Generar contratos por cada usuario
+      for (let userIndex = 0; userIndex < users.length; userIndex++) {
+        const user = users[userIndex];
         console.log(`Creando contratos para usuario: ${user.email}`);
-        for (let i = 1; i <= 20; i++) {
+        setContractProgress({ 
+          current: userIndex * contractsPerUser, 
+          total: totalContracts, 
+          message: `Creando contratos para ${user.email}...` 
+        });
+        
+        for (let i = 1; i <= contractsPerUser; i++) {
           // Fechas aleatorias en los últimos 12 meses
           const now = new Date();
           const startDate = new Date(now.getTime() - Math.random() * 365 * 24 * 60 * 60 * 1000);
@@ -500,25 +572,108 @@ export const AdminPanel: React.FC = () => {
           const result = await ContractService.createContract(contractData);
           if (result.success) {
             totalCreated++;
+            setContractProgress({ 
+              current: totalCreated, 
+              total: totalContracts, 
+              message: `Creando contrato ${i}/${contractsPerUser} para ${user.email}` 
+            });
           } else {
             console.error(`Error creando contrato ${i} para ${user.email}:`, result.error);
           }
+          
+          // Pausa de 300ms entre cada contrato para no saturar Firebase
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+        
+        // Pausa adicional entre usuarios
+        if (userIndex < users.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
       
+      setContractProgress({ 
+        current: totalCreated, 
+        total: totalContracts, 
+        message: `✅ ${totalCreated} contratos creados exitosamente` 
+      });
+      
       console.log(`✅ Creados ${totalCreated} contratos en total`);
+      
+      // Limpiar mensaje después de 3 segundos
+      setTimeout(() => {
+        setContractProgress({ current: 0, total: 0, message: '' });
+        setInitializingContracts(false);
+      }, 3000);
+      
     } catch (err: any) {
       console.error('Error inicializando contratos:', err);
+      setContractProgress({ 
+        current: 0, 
+        total: 0, 
+        message: `❌ Error: ${err.message}` 
+      });
+      setTimeout(() => {
+        setContractProgress({ current: 0, total: 0, message: '' });
+        setInitializingContracts(false);
+      }, 5000);
     }
   };
 
   return (
     <div className="min-h-screen bg-black p-8">
+      {/* Progress Indicator - Floating */}
+      {contractProgress.message && (
+        <div className="fixed top-4 right-4 z-50 bg-blue-900 border border-blue-500 rounded-lg shadow-xl p-4 min-w-[350px]">
+          <div className="flex items-center space-x-3">
+            {initializingContracts && (
+              <div className="w-6 h-6 rounded-full border-2 border-blue-400 border-t-transparent animate-spin"></div>
+            )}
+            <div className="flex-1">
+              <p className="text-white text-sm font-medium">{contractProgress.message}</p>
+              {contractProgress.total > 0 && (
+                <div className="mt-2">
+                  <div className="flex justify-between text-xs text-blue-200 mb-1">
+                    <span>{contractProgress.current}/{contractProgress.total}</span>
+                    <span>{Math.round((contractProgress.current / contractProgress.total) * 100)}%</span>
+                  </div>
+                  <div className="w-full bg-gray-700 rounded-full h-1.5">
+                    <div 
+                      className="bg-blue-500 h-full rounded-full transition-all"
+                      style={{ width: `${(contractProgress.current / contractProgress.total) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-white">Panel de Administración</h1>
           <div className="flex gap-3">
+            <button
+              onClick={deleteAllContracts}
+              disabled={deletingContracts || initializingContracts}
+              className="px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl hover:shadow-lg hover:scale-105 transition-all duration-300 font-semibold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              {deletingContracts ? 'Eliminando...' : 'Limpiar Contratos'}
+            </button>
+            <button
+              onClick={() => initializeContracts(true)}
+              disabled={initializingContracts || deletingContracts}
+              className="px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:shadow-lg hover:scale-105 transition-all duration-300 font-semibold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              {initializingContracts ? 'Generando...' : 'Generar Contratos'}
+            </button>
             <button
               onClick={() => setShowBulkUserUpload(true)}
               className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:shadow-lg hover:scale-105 transition-all duration-300 font-semibold flex items-center gap-2"
