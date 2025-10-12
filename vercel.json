@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "buildCommand": "cd rendimientos-web && npm install && npm run build",
+  "outputDirectory": "rendimientos-web/dist",
+  "installCommand": "cd rendimientos-web && npm install",
+  "routes": [
+    {
+      "src": "/assets/(.*)",
+      "dest": "/assets/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ]
+}
