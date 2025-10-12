@@ -34,134 +34,410 @@ export default function LoginMinimal() {
   };
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center p-8 relative overflow-hidden">
-      {/* Animated background elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-green-500/5 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-gray-500/5 rounded-full blur-3xl animate-pulse animation-delay-2000"></div>
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: '#000000',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '20px',
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+      zIndex: 9999
+    }}>
+      {/* Background Effects */}
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        pointerEvents: 'none',
+        overflow: 'hidden'
+      }}>
+        <div style={{
+          position: 'absolute',
+          top: '25%',
+          left: '25%',
+          width: '288px',
+          height: '288px',
+          backgroundColor: 'rgba(34, 197, 94, 0.05)',
+          borderRadius: '50%',
+          filter: 'blur(48px)',
+          animation: 'pulse 4s ease-in-out infinite'
+        }}></div>
+        <div style={{
+          position: 'absolute',
+          bottom: '25%',
+          right: '25%',
+          width: '288px',
+          height: '288px',
+          backgroundColor: 'rgba(107, 114, 128, 0.05)',
+          borderRadius: '50%',
+          filter: 'blur(48px)',
+          animation: 'pulse 4s ease-in-out infinite 2s'
+        }}></div>
       </div>
 
-      {/* Login Form Container - Centered */}
-      <div className="relative z-10 w-full max-w-lg">
-        {/* Logo/Brand */}
-        <div className="text-center mb-10">
-          <div className="inline-block mb-6">
-            <div className="w-20 h-20 bg-gradient-silver rounded-2xl flex items-center justify-center shadow-2xl">
-              <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+      {/* Main Container */}
+      <div style={{
+        position: 'relative',
+        zIndex: 10,
+        backgroundColor: 'rgba(17, 24, 39, 0.8)',
+        backdropFilter: 'blur(16px)',
+        border: '1px solid rgba(55, 65, 81, 0.5)',
+        borderRadius: '16px',
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)',
+        padding: '32px',
+        width: '100%',
+        maxWidth: '400px',
+        margin: '0 auto'
+      }}>
+        {/* Logo */}
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <div style={{ display: 'inline-block', marginBottom: '24px' }}>
+            <div style={{
+              width: '80px',
+              height: '80px',
+              background: 'linear-gradient(135deg, #d1d5db 0%, #6b7280 100%)',
+              borderRadius: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+              margin: '0 auto'
+            }}>
+              <svg width="48" height="48" fill="none" stroke="white" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
               </svg>
             </div>
           </div>
-          <h1 className="text-5xl font-bold text-white mb-3">
+          <h1 style={{
+            fontSize: '36px',
+            fontWeight: 'bold',
+            color: 'white',
+            margin: '0 0 8px 0'
+          }}>
             Rendimientos
           </h1>
-          <p className="text-xl text-dark-textSecondary font-medium">
+          <p style={{
+            fontSize: '18px',
+            color: '#9ca3af',
+            fontWeight: '500',
+            margin: 0
+          }}>
             {isRegistering ? 'Crea tu cuenta' : 'Bienvenido de vuelta'}
           </p>
         </div>
 
-        {/* Form Card */}
-        <div className="bg-dark-bgSecondary border-2 border-dark-border rounded-2xl shadow-2xl p-8 backdrop-blur-sm w-full">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label htmlFor="email" className="block text-base font-semibold text-white mb-3">
-                Correo electrónico
-              </label>
+        {/* Form */}
+        <form onSubmit={handleSubmit} style={{ marginBottom: '32px' }}>
+          {/* Email Field */}
+          <div style={{ marginBottom: '24px' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '16px',
+              fontWeight: '600',
+              color: 'white',
+              marginBottom: '12px'
+            }}>
+              Correo electrónico
+            </label>
+            <div style={{ position: 'relative' }}>
               <input
                 type="email"
-                id="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full px-5 py-4 bg-white/10 border-2 border-gray-600 text-white rounded-xl text-lg placeholder-gray-400 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 focus:bg-white/20 shadow-inner"
                 placeholder="tu@email.com"
-                style={{ textShadow: '0 0 8px rgba(255,255,255,0.3)' }}
+                style={{
+                  width: '100%',
+                  padding: '16px 20px',
+                  backgroundColor: 'rgba(31, 41, 55, 0.8)',
+                  border: '1px solid #4b5563',
+                  borderRadius: '12px',
+                  color: 'white',
+                  fontSize: '18px',
+                  outline: 'none',
+                  transition: 'all 0.2s',
+                  boxSizing: 'border-box'
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = '#22c55e';
+                  e.target.style.boxShadow = '0 0 0 2px rgba(34, 197, 94, 0.2)';
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = '#4b5563';
+                  e.target.style.boxShadow = 'none';
+                }}
               />
+              <div style={{
+                position: 'absolute',
+                top: '50%',
+                right: '16px',
+                transform: 'translateY(-50%)',
+                pointerEvents: 'none'
+              }}>
+                <svg width="20" height="20" fill="none" stroke="#6b7280" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
+                </svg>
+              </div>
             </div>
+          </div>
 
-            <div>
-              <label htmlFor="password" className="block text-base font-semibold text-white mb-3">
-                Contraseña
-              </label>
+          {/* Password Field */}
+          <div style={{ marginBottom: '24px' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '16px',
+              fontWeight: '600',
+              color: 'white',
+              marginBottom: '12px'
+            }}>
+              Contraseña
+            </label>
+            <div style={{ position: 'relative' }}>
               <input
                 type="password"
-                id="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={6}
-                className="w-full px-5 py-4 bg-white/10 border-2 border-gray-600 text-white rounded-xl text-lg placeholder-gray-400 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 focus:bg-white/20 shadow-inner"
                 placeholder="••••••••"
-                style={{ textShadow: '0 0 8px rgba(255,255,255,0.3)' }}
+                style={{
+                  width: '100%',
+                  padding: '16px 20px',
+                  backgroundColor: 'rgba(31, 41, 55, 0.8)',
+                  border: '1px solid #4b5563',
+                  borderRadius: '12px',
+                  color: 'white',
+                  fontSize: '18px',
+                  outline: 'none',
+                  transition: 'all 0.2s',
+                  boxSizing: 'border-box'
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = '#22c55e';
+                  e.target.style.boxShadow = '0 0 0 2px rgba(34, 197, 94, 0.2)';
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = '#4b5563';
+                  e.target.style.boxShadow = 'none';
+                }}
               />
-              <p className="mt-2 text-sm text-gray-300">Mínimo 6 caracteres</p>
-            </div>
-
-            {error && (
-              <div className="bg-red-500/10 border-2 border-red-500/30 text-red-400 text-base text-center p-4 rounded-xl font-medium">
-                {error}
+              <div style={{
+                position: 'absolute',
+                top: '50%',
+                right: '16px',
+                transform: 'translateY(-50%)',
+                pointerEvents: 'none'
+              }}>
+                <svg width="20" height="20" fill="none" stroke="#6b7280" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
               </div>
+            </div>
+            {isRegistering && (
+              <p style={{
+                margin: '8px 0 0 0',
+                fontSize: '14px',
+                color: '#9ca3af'
+              }}>
+                Mínimo 6 caracteres
+              </p>
             )}
-
-            <button 
-              type="submit" 
-              className="w-full py-4 px-6 bg-gradient-silver text-white border-none rounded-xl text-lg font-bold cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-              disabled={loading}
-            >
-              {loading 
-                ? (
-                  <span className="flex items-center justify-center">
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    {isRegistering ? 'Creando cuenta...' : 'Iniciando sesión...'}
-                  </span>
-                )
-                : (isRegistering ? 'Crear Cuenta' : 'Iniciar Sesión')
-              }
-            </button>
-          </form>
-
-          <div className="mt-8 pt-6 border-t border-dark-border text-center">
-            <button
-              type="button"
-              onClick={() => {
-                setIsRegistering(!isRegistering);
-                setError('');
-                setEmail('');
-                setPassword('');
-              }}
-              className="text-dark-textSecondary text-base cursor-pointer transition-colors duration-200 hover:text-green-400 font-medium"
-            >
-              {isRegistering ? '¿Ya tienes cuenta? ' : '¿No tienes cuenta? '}
-              <span className="text-green-400 hover:text-green-300 font-semibold">
-                {isRegistering ? 'Iniciar Sesión' : 'Crear una'}
-              </span>
-            </button>
           </div>
+
+          {/* Error Message */}
+          {error && (
+            <div style={{
+              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              color: '#fca5a5',
+              fontSize: '16px',
+              textAlign: 'center',
+              padding: '16px',
+              borderRadius: '12px',
+              fontWeight: '500',
+              marginBottom: '24px'
+            }}>
+              {error}
+            </div>
+          )}
+
+          {/* Submit Button */}
+          <button 
+            type="submit" 
+            disabled={loading}
+            style={{
+              width: '100%',
+              padding: '16px 24px',
+              background: 'linear-gradient(135deg, #d1d5db 0%, #9ca3af 100%)',
+              color: '#000000',
+              border: 'none',
+              borderRadius: '12px',
+              fontSize: '18px',
+              fontWeight: 'bold',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              transition: 'all 0.3s',
+              opacity: loading ? 0.5 : 1,
+              transform: loading ? 'none' : 'translateY(0)',
+              boxSizing: 'border-box'
+            }}
+            onMouseOver={(e) => {
+              if (!loading) {
+                e.target.style.background = 'linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%)';
+                e.target.style.transform = 'translateY(-2px)';
+                e.target.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.3)';
+              }
+            }}
+            onMouseOut={(e) => {
+              if (!loading) {
+                e.target.style.background = 'linear-gradient(135deg, #d1d5db 0%, #9ca3af 100%)';
+                e.target.style.transform = 'translateY(0)';
+                e.target.style.boxShadow = 'none';
+              }
+            }}
+          >
+            {loading ? (
+              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg 
+                  className="animate-spin" 
+                  width="20" 
+                  height="20" 
+                  style={{ marginRight: '12px' }}
+                  xmlns="http://www.w3.org/2000/svg" 
+                  fill="none" 
+                  viewBox="0 0 24 24"
+                >
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                {isRegistering ? 'Creando cuenta...' : 'Iniciando sesión...'}
+              </span>
+            ) : (
+              isRegistering ? 'Crear Cuenta' : 'Iniciar Sesión'
+            )}
+          </button>
+        </form>
+
+        {/* Toggle Form */}
+        <div style={{
+          marginTop: '32px',
+          paddingTop: '24px',
+          borderTop: '1px solid rgba(55, 65, 81, 0.5)',
+          textAlign: 'center'
+        }}>
+          <button
+            type="button"
+            onClick={() => {
+              setIsRegistering(!isRegistering);
+              setError('');
+              setEmail('');
+              setPassword('');
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#9ca3af',
+              fontSize: '16px',
+              cursor: 'pointer',
+              transition: 'color 0.2s',
+              fontWeight: '500'
+            }}
+            onMouseOver={(e) => e.target.style.color = '#22c55e'}
+            onMouseOut={(e) => e.target.style.color = '#9ca3af'}
+          >
+            {isRegistering ? '¿Ya tienes cuenta? ' : '¿No tienes cuenta? '}
+            <span style={{
+              color: '#22c55e',
+              fontWeight: '600',
+              cursor: 'pointer'
+            }}
+            onMouseOver={(e) => e.target.style.color = '#16a34a'}
+            onMouseOut={(e) => e.target.style.color = '#22c55e'}
+            >
+              {isRegistering ? 'Iniciar Sesión' : 'Crear una'}
+            </span>
+          </button>
         </div>
 
         {/* Footer */}
-        <div className="mt-8 text-center">
-          <p className="text-sm text-dark-textMuted">
+        <div style={{
+          marginTop: '32px',
+          textAlign: 'center'
+        }}>
+          <p style={{
+            fontSize: '14px',
+            color: '#6b7280',
+            margin: '0 0 16px 0'
+          }}>
             © 2024 Rendimientos. Todos los derechos reservados.
           </p>
-          <div className="mt-4 flex justify-center space-x-4">
-            <a href="#" className="text-sm text-dark-textSecondary hover:text-green-400 transition-colors">
+          <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            gap: '16px'
+          }}>
+            <a href="#" style={{
+              fontSize: '14px',
+              color: '#9ca3af',
+              textDecoration: 'none',
+              transition: 'color 0.2s'
+            }}
+            onMouseOver={(e) => e.target.style.color = '#22c55e'}
+            onMouseOut={(e) => e.target.style.color = '#9ca3af'}
+            >
               Términos
             </a>
-            <span className="text-dark-textMuted">•</span>
-            <a href="#" className="text-sm text-dark-textSecondary hover:text-green-400 transition-colors">
+            <span style={{ color: '#6b7280' }}>•</span>
+            <a href="#" style={{
+              fontSize: '14px',
+              color: '#9ca3af',
+              textDecoration: 'none',
+              transition: 'color 0.2s'
+            }}
+            onMouseOver={(e) => e.target.style.color = '#22c55e'}
+            onMouseOut={(e) => e.target.style.color = '#9ca3af'}
+            >
               Privacidad
             </a>
-            <span className="text-dark-textMuted">•</span>
-            <a href="#" className="text-sm text-dark-textSecondary hover:text-green-400 transition-colors">
+            <span style={{ color: '#6b7280' }}>•</span>
+            <a href="#" style={{
+              fontSize: '14px',
+              color: '#9ca3af',
+              textDecoration: 'none',
+              transition: 'color 0.2s'
+            }}
+            onMouseOver={(e) => e.target.style.color = '#22c55e'}
+            onMouseOut={(e) => e.target.style.color = '#9ca3af'}
+            >
               Soporte
             </a>
           </div>
         </div>
       </div>
+
+      {/* CSS Animations */}
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 0.3; }
+          50% { opacity: 0.6; }
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .animate-spin {
+          animation: spin 1s linear infinite;
+        }
+        input::placeholder {
+          color: #6b7280;
+        }
+      `}</style>
     </div>
   );
 }
