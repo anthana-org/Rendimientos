@@ -116,7 +116,8 @@ export class ContractService {
 
     try {
       const contractsRef = collection(db, 'contracts');
-      const q = query(contractsRef, where('userId', '==', userId), orderBy('expirationDate', 'desc'));
+      // Temporalmente sin orderBy mientras se construye el índice
+      const q = query(contractsRef, where('userId', '==', userId));
       const snapshot = await getDocs(q);
 
       const contracts: ContractExpiration[] = [];
@@ -144,6 +145,13 @@ export class ContractService {
           daysRemaining: remainingDays,
           contractDuration
         });
+      });
+
+      // Ordenar en memoria por fecha de expiración (más reciente primero)
+      contracts.sort((a, b) => {
+        const dateA = new Date(a.expirationDate).getTime();
+        const dateB = new Date(b.expirationDate).getTime();
+        return dateB - dateA;
       });
 
       return { success: true, data: contracts };

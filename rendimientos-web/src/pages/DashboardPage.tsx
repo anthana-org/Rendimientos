@@ -1,202 +1,617 @@
-import { SimpleRendimientosTable } from '../components/SimpleRendimientosTable';
-import { useContractsTotal } from '../hooks/useContractsTotal';
-import { WithdrawalButton } from '../components/WithdrawalButton';
-import { DepositButton } from '../components/DepositButton';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../hooks/useAuth';
+import { ContractService } from '../services/contractService';
+import { RendimientosService } from '../services/rendimientosService';
+import { PerformanceChart } from '../components/PerformanceChart';
+
+interface Contract {
+  id: string;
+  contractType: string;
+  investmentAmount: number;
+  monthlyReturn: number;
+  startDate: string;
+  expirationDate: string;
+  status: string;
+}
+
+interface Rendimiento {
+  period: string;
+  capital: number;
+  rendimientoAmount: number;
+  balance: number;
+  rendimientoPercent: number;
+}
 
 export default function DashboardPage() {
-  const { totalAmount, loading: contractsLoading } = useContractsTotal();
+  const { user } = useAuth();
+  const [contracts, setContracts] = useState<Contract[]>([]);
+  const [rendimientos, setRendimientos] = useState<Rendimiento[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedPeriod, setSelectedPeriod] = useState('6M');
+  const [totalBalance, setTotalBalance] = useState(0);
+  const [totalInvested, setTotalInvested] = useState(0);
+  const [monthlyGains, setMonthlyGains] = useState(0);
+  const [activeContracts, setActiveContracts] = useState(0);
+  
+  // Estados para modales de depósito y retiro
+  const [showDepositModal, setShowDepositModal] = useState(false);
+  const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
+  const [depositAmount, setDepositAmount] = useState('');
+  const [withdrawalAmount, setWithdrawalAmount] = useState('');
+  const [depositMethod, setDepositMethod] = useState('bank_transfer');
+  const [withdrawalMethod, setWithdrawalMethod] = useState('bank_transfer');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [message, setMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      loadUserData();
+    }
+  }, [user]);
+
+  // Limpiar mensajes automáticamente
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => {
+        setMessage(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [message]);
+
+  const loadUserData = async () => {
+    if (!user) return;
+    
+    try {
+      setLoading(true);
+      
+      // Cargar contratos del usuario
+      const contractsResult = await ContractService.getContractsByUser(user.uid);
+      if (contractsResult.success && contractsResult.data) {
+        const userContracts = contractsResult.data;
+        setContracts(userContracts);
+        
+        // Calcular métricas
+        const active = userContracts.filter(c => c.status === 'active');
+        setActiveContracts(active.length);
+        
+        const totalInv = active.reduce((sum, c) => sum + (c.investmentAmount || 0), 0);
+        setTotalInvested(totalInv);
+        
+        // Calcular balance total con rendimientos
+        let totalBal = totalInv;
+        let totalGains = 0;
+        
+        active.forEach(contract => {
+          const startDate = new Date(contract.startDate);
+          const now = new Date();
+          const monthsElapsed = Math.max(1, Math.ceil(
+            (now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30)
+          ));
+          
+          const monthlyReturn = contract.monthlyReturn || 0;
+          const monthlyGain = contract.investmentAmount * (monthlyReturn / 100);
+          const totalGain = monthlyGain * monthsElapsed;
+          
+          totalGains += totalGain;
+        });
+        
+        setTotalBalance(totalInv + totalGains);
+        setMonthlyGains(totalGains);
+        
+        // Preparar datos para la gráfica
+        const chartData = active
+          .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
+          .map((contract, index) => {
+            const startDate = new Date(contract.startDate);
+            const now = new Date();
+            const monthsElapsed = Math.max(1, Math.ceil(
+              (now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30)
+            ));
+            
+            const monthlyReturn = contract.monthlyReturn || 0;
+            const monthlyGain = contract.investmentAmount * (monthlyReturn / 100);
+            const totalGain = monthlyGain * monthsElapsed;
+            
+            return {
+              period: `${contract.contractType} - ${startDate.toLocaleDateString('es-MX', { month: 'short', year: 'numeric' })}`,
+              capital: contract.investmentAmount,
+              rendimientoAmount: totalGain,
+              balance: contract.investmentAmount + totalGain,
+              contractType: contract.contractType,
+              monthlyReturn: monthlyReturn,
+              monthsElapsed: monthsElapsed
+            };
+          });
+        
+        setRendimientos(chartData);
+      }
+    } catch (error) {
+      console.error('Error cargando datos del usuario:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getROI = () => {
+    if (totalInvested === 0) return 0;
+    return ((totalBalance - totalInvested) / totalInvested * 100).toFixed(2);
+  };
+
+  const getMonthlyROI = () => {
+    if (totalInvested === 0) return 0;
+    return (monthlyGains / totalInvested * 100).toFixed(2);
+  };
+
+  const handleDeposit = async () => {
+    if (!depositAmount || parseFloat(depositAmount) <= 0) {
+      setMessage({type: 'error', text: 'Ingresa un monto válido'});
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      // Aquí iría la lógica real de depósito
+      // Por ahora simulamos un depósito exitoso
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      setMessage({type: 'success', text: `Depósito de $${parseFloat(depositAmount).toLocaleString()} procesado exitosamente`});
+      setShowDepositModal(false);
+      setDepositAmount('');
+      
+      // Recargar datos del usuario
+      await loadUserData();
+    } catch (error) {
+      setMessage({type: 'error', text: 'Error procesando el depósito. Intenta nuevamente.'});
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleWithdrawal = async () => {
+    if (!withdrawalAmount || parseFloat(withdrawalAmount) <= 0) {
+      setMessage({type: 'error', text: 'Ingresa un monto válido'});
+      return;
+    }
+
+    if (parseFloat(withdrawalAmount) > totalBalance) {
+      setMessage({type: 'error', text: 'No tienes suficiente balance para este retiro'});
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      // Aquí iría la lógica real de retiro
+      // Por ahora simulamos un retiro exitoso
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      setMessage({type: 'success', text: `Retiro de $${parseFloat(withdrawalAmount).toLocaleString()} procesado exitosamente`});
+      setShowWithdrawalModal(false);
+      setWithdrawalAmount('');
+      
+      // Recargar datos del usuario
+      await loadUserData();
+    } catch (error) {
+      setMessage({type: 'error', text: 'Error procesando el retiro. Intenta nuevamente.'});
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="bg-black min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-white text-xl">Cargando tu dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-black min-h-screen">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-12 space-y-6 sm:space-y-8 lg:space-y-12">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-6 sm:gap-8 lg:gap-10 mb-8 sm:mb-12">
-          <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-6 lg:space-x-8">
-            <DepositButton />
-            <WithdrawalButton />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-12">
+        
+        {/* Header con Acciones */}
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-8">
+          <div>
+            <h1 className="text-3xl lg:text-4xl font-bold text-white mb-2">
+              ¡Hola, {user?.email?.split('@')[0]}!
+            </h1>
+            <p className="text-gray-400 text-lg">Gestiona tus inversiones y rendimientos</p>
+          </div>
+          
+          <div className="flex gap-4 mt-6 lg:mt-0">
+            <button 
+              onClick={() => setShowDepositModal(true)}
+              className="px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:from-green-700 hover:to-green-800 transition-all duration-300 font-semibold flex items-center gap-2 shadow-lg hover:shadow-green-500/25"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              Depósito
+            </button>
+            <button 
+              onClick={() => setShowWithdrawalModal(true)}
+              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-300 font-semibold flex items-center gap-2 shadow-lg hover:shadow-blue-500/25"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4m16 0l-4-4m4 4l-4 4" />
+              </svg>
+              Retiro
+            </button>
           </div>
         </div>
 
-        {/* Gráfica Principal - Prioridad */}
-        <div className="bg-gray-900/50 backdrop-blur-sm rounded-2xl sm:rounded-3xl shadow-2xl p-6 sm:p-8 lg:p-12 xl:p-16 border-2 border-gray-700/50 hover:border-green-400 hover:shadow-green-500/20 hover:shadow-3xl hover:-translate-y-1 transition-all duration-500 ease-out mt-8 sm:mt-12 lg:mt-16 mb-8 sm:mb-12 lg:mb-16">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8 sm:mb-10 lg:mb-12 gap-6 sm:gap-8">
-            <div>
-              <h3 className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-white mb-2 sm:mb-3 lg:mb-4">Rendimiento Mensual</h3>
-              <p className="text-lg sm:text-xl lg:text-2xl text-gray-400">Evolución de tu patrimonio en el tiempo</p>
+        {/* Métricas Principales */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          {/* Balance Total */}
+          <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/50 hover:border-green-500/50 transition-all duration-300">
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center">
+                <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                </svg>
+              </div>
+              <span className="text-green-400 text-sm font-medium">+{getMonthlyROI()}% este mes</span>
             </div>
-            <div className="flex space-x-3 sm:space-x-4 lg:space-x-6">
-              <button className="px-8 py-4 sm:px-10 sm:py-5 lg:px-12 lg:py-6 bg-green-500/20 text-green-400 rounded-xl border border-green-500/30 text-base sm:text-lg lg:text-xl font-medium hover:bg-green-500/30 hover:border-green-400 hover:text-green-300 hover:scale-105 transition-all duration-300 ease-out shadow-lg hover:shadow-green-500/25">
-                6M
-              </button>
-              <button className="px-8 py-4 sm:px-10 sm:py-5 lg:px-12 lg:py-6 bg-dark-bgTertiary text-gray-400 rounded-xl border border-gray-700/50 text-base sm:text-lg lg:text-xl font-medium hover:bg-gray-900/50 backdrop-blur-sm hover:text-white hover:border-green-500/50 hover:scale-105 transition-all duration-300 ease-out">
-                1A
-              </button>
-              <button className="px-8 py-4 sm:px-10 sm:py-5 lg:px-12 lg:py-6 bg-dark-bgTertiary text-gray-400 rounded-xl border border-gray-700/50 text-base sm:text-lg lg:text-xl font-medium hover:bg-gray-900/50 backdrop-blur-sm hover:text-white hover:border-green-500/50 hover:scale-105 transition-all duration-300 ease-out">
-                Todo
-              </button>
-            </div>
+            <h3 className="text-gray-400 text-sm font-medium mb-2">Balance Total</h3>
+            <p className="text-3xl font-bold text-white">${totalBalance.toLocaleString()}</p>
           </div>
-          
-          <div className="h-80 sm:h-96 lg:h-[32rem] xl:h-[40rem] flex items-center justify-center bg-gradient-to-br from-dark-bgTertiary to-dark-bg rounded-2xl sm:rounded-3xl border-2 border-gray-700/50 hover:border-green-400/50 transition-all duration-500">
-            <div className="text-center px-8">
-              <div className="w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 bg-gradient-green rounded-full flex items-center justify-center mx-auto mb-8 sm:mb-12 animate-pulse hover:animate-none hover:scale-110 hover:shadow-2xl hover:shadow-green-500/30 transition-all duration-500 ease-out">
-                <svg className="w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+
+          {/* Total Invertido */}
+          <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/50 hover:border-blue-500/50 transition-all duration-300">
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
+                <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+              </div>
+            </div>
+            <h3 className="text-gray-400 text-sm font-medium mb-2">Total Invertido</h3>
+            <p className="text-3xl font-bold text-white">${totalInvested.toLocaleString()}</p>
+          </div>
+
+          {/* Ganancias Totales */}
+          <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/50 hover:border-purple-500/50 transition-all duration-300">
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center">
+                <svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                 </svg>
               </div>
-              <h4 className="text-2xl sm:text-3xl lg:text-4xl font-semibold text-white mb-4 hover:text-green-400 transition-colors duration-300">Gráfico de Rendimiento</h4>
-              <p className="text-lg sm:text-xl lg:text-2xl text-gray-400 mb-2">Visualización interactiva de tu crecimiento</p>
-              <p className="text-sm sm:text-base lg:text-lg text-dark-textMuted animate-pulse">Próximamente disponible</p>
+              <span className="text-green-400 text-sm font-medium">+{getROI()}% ROI</span>
             </div>
+            <h3 className="text-gray-400 text-sm font-medium mb-2">Ganancias Totales</h3>
+            <p className="text-3xl font-bold text-white">${monthlyGains.toLocaleString()}</p>
+          </div>
+
+          {/* Contratos Activos */}
+          <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/50 hover:border-orange-500/50 transition-all duration-300">
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-12 h-12 bg-orange-500/20 rounded-xl flex items-center justify-center">
+                <svg className="w-6 h-6 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+            </div>
+            <h3 className="text-gray-400 text-sm font-medium mb-2">Contratos Activos</h3>
+            <p className="text-3xl font-bold text-white">{activeContracts}</p>
           </div>
         </div>
 
-        {/* Balance Total - Elemento Principal */}
-        <div className="bg-gradient-to-br from-dark-bgSecondary via-dark-bgTertiary to-dark-bgSecondary rounded-2xl sm:rounded-3xl shadow-2xl p-6 sm:p-8 lg:p-12 xl:p-16 border-4 border-gray-700/50 hover:border-green-400 hover:shadow-green-500/20 hover:shadow-3xl hover:-translate-y-1 transition-all duration-500 ease-out ring-2 ring-dark-borderLight hover:ring-green-400/30 mt-8 sm:mt-12 lg:mt-16 mb-8 sm:mb-12 lg:mb-16">
-          <div className="text-center mb-6 sm:mb-8">
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-semibold text-gray-400 mb-2 sm:mb-3">Balance Total</h2>
-            <div className="text-6xl sm:text-7xl lg:text-8xl xl:text-9xl 2xl:text-[10rem] font-bold text-white mb-2 sm:mb-3 hover:text-green-400 transition-colors duration-500 cursor-default">$385,000</div>
-            <div className="flex items-center justify-center space-x-4 sm:space-x-8">
-              <span className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl text-green-400 font-semibold">+17.0%</span>
-              <span className="text-lg sm:text-xl lg:text-2xl xl:text-3xl text-gray-400">este mes</span>
-            </div>
+        {/* Gráfica de Rendimientos */}
+        {rendimientos.length > 0 && (
+          <div className="mb-8">
+            <PerformanceChart 
+              data={rendimientos}
+              height={500}
+            />
+          </div>
+        )}
+
+        {/* Tabla de Contratos */}
+        <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700/50 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-700/50">
+            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+              <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Mis Contratos ({contracts.length})
+            </h3>
           </div>
           
-          {/* Métricas principales en fila */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-            <div className="text-center p-4 sm:p-6 lg:p-8 bg-gray-900/50 backdrop-blur-sm/50 rounded-xl sm:rounded-2xl border border-gray-700/50">
-              <div className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold text-white mb-2">$235,000</div>
-              <div className="text-sm sm:text-base lg:text-lg text-gray-400 mb-1">Rendimiento Total</div>
-              <div className="text-green-400 font-semibold text-base sm:text-lg lg:text-xl">+7.4%</div>
+          {contracts.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-700/50">
+                    <th className="text-left py-4 px-6 text-gray-400 font-medium">Tipo</th>
+                    <th className="text-left py-4 px-6 text-gray-400 font-medium">Monto</th>
+                    <th className="text-left py-4 px-6 text-gray-400 font-medium">Rendimiento</th>
+                    <th className="text-left py-4 px-6 text-gray-400 font-medium">Inicio</th>
+                    <th className="text-left py-4 px-6 text-gray-400 font-medium">Vencimiento</th>
+                    <th className="text-left py-4 px-6 text-gray-400 font-medium">Días Restantes</th>
+                    <th className="text-left py-4 px-6 text-gray-400 font-medium">Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {contracts.map((contract) => {
+                    const now = new Date();
+                    const expirationDate = new Date(contract.expirationDate);
+                    const timeDiff = expirationDate.getTime() - now.getTime();
+                    const daysRemaining = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+                    
+                    return (
+                      <tr key={contract.id} className="border-b border-gray-700/30 hover:bg-gray-800/30 transition-colors">
+                        <td className="py-4 px-6 text-white font-medium">{contract.contractType}</td>
+                        <td className="py-4 px-6 text-white">${contract.investmentAmount?.toLocaleString() || 'N/A'}</td>
+                        <td className="py-4 px-6 text-green-400 font-bold">{contract.monthlyReturn || 0}%</td>
+                        <td className="py-4 px-6 text-gray-300">{new Date(contract.startDate).toLocaleDateString('es-MX')}</td>
+                        <td className="py-4 px-6 text-gray-300">{new Date(contract.expirationDate).toLocaleDateString('es-MX')}</td>
+                        <td className="py-4 px-6">
+                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                            daysRemaining > 30 ? 'bg-green-500/20 text-green-400' :
+                            daysRemaining > 7 ? 'bg-yellow-500/20 text-yellow-400' :
+                            daysRemaining > 0 ? 'bg-red-500/20 text-red-400' :
+                            'bg-gray-500/20 text-gray-400'
+                          }`}>
+                            {daysRemaining > 0 ? `${daysRemaining} días` : 
+                             daysRemaining === 0 ? 'Hoy' : 
+                             `${Math.abs(daysRemaining)} días vencido`}
+                          </span>
+                        </td>
+                        <td className="py-4 px-6">
+                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                            contract.status === 'active' ? 'bg-green-500/20 text-green-400' :
+                            contract.status === 'inactive' ? 'bg-gray-500/20 text-gray-400' :
+                            'bg-red-500/20 text-red-400'
+                          }`}>
+                            {contract.status === 'active' ? 'Activo' : 
+                             contract.status === 'inactive' ? 'Inactivo' : 'Vencido'}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-            
-            <div className="text-center p-4 sm:p-6 lg:p-8 bg-gray-900/50 backdrop-blur-sm/50 rounded-xl sm:rounded-2xl border border-gray-700/50">
-              <div className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold text-white mb-2">$150,000</div>
-              <div className="text-sm sm:text-base lg:text-lg text-gray-400 mb-1">Balance Actual</div>
-              <div className="text-green-400 font-semibold text-base sm:text-lg lg:text-xl">+9.2%</div>
+          ) : (
+            <div className="text-center py-12">
+              <div className="w-16 h-16 bg-gray-700/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+              </div>
+              <h4 className="text-lg font-semibold text-white mb-2">No tienes contratos aún</h4>
+              <p className="text-gray-400 mb-6">Comienza invirtiendo para ver tus rendimientos aquí</p>
+              <button className="px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:from-green-700 hover:to-green-800 transition-all duration-300 font-semibold">
+                Crear Primera Inversión
+              </button>
             </div>
-            
-            <div className="text-center p-4 sm:p-6 lg:p-8 bg-gray-900/50 backdrop-blur-sm/50 rounded-xl sm:rounded-2xl border border-gray-700/50 sm:col-span-2 lg:col-span-1">
-              <div className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold text-white mb-2">12</div>
-              <div className="text-sm sm:text-base lg:text-lg text-gray-400 mb-1">Inversiones Activas</div>
-              <div className="text-green-400 font-semibold text-base sm:text-lg lg:text-xl">+8.1%</div>
-            </div>
-          </div>
-        </div>
-
-
-        {/* Estadísticas Secundarias */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-10 mt-8 sm:mt-12 lg:mt-16 mb-8 sm:mb-12 lg:mb-16">
-          {/* Estadísticas Rápidas */}
-          <div className="bg-gray-900/50 backdrop-blur-sm rounded-xl sm:rounded-2xl shadow-2xl p-6 sm:p-8 lg:p-10 border-2 border-gray-700/50 hover:border-green-400 hover:shadow-green-500/20 hover:-translate-y-1 transition-all duration-500 ease-out">
-            <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white mb-4 sm:mb-5 lg:mb-6">Estadísticas Rápidas</h3>
-            <div className="space-y-4 sm:space-y-5 lg:space-y-6">
-              <div className="flex items-center justify-between p-3 sm:p-4 lg:p-6 bg-green-500/10 border border-green-500/30 rounded-lg sm:rounded-xl hover:bg-green-500/15 hover:border-green-400/50 hover:scale-[1.02] transition-all duration-300 ease-out">
-                <div className="flex items-center">
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 bg-green-500/20 rounded-lg sm:rounded-xl flex items-center justify-center mr-3 sm:mr-4">
-                    <svg className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="font-semibold text-white text-sm sm:text-base lg:text-lg">Mejor mes</p>
-                    <p className="text-gray-400 text-xs sm:text-sm">Diciembre 2024</p>
-                  </div>
-                </div>
-                <span className="text-green-400 font-bold text-lg sm:text-xl">+12.5%</span>
-              </div>
-
-              <div className="flex items-center justify-between p-4 sm:p-6 bg-blue-500/10 border border-blue-500/30 rounded-xl sm:rounded-2xl">
-                <div className="flex items-center">
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 bg-blue-500/20 rounded-lg sm:rounded-xl flex items-center justify-center mr-3 sm:mr-4">
-                    <svg className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="font-semibold text-white text-sm sm:text-base lg:text-lg">Promedio mensual</p>
-                    <p className="text-gray-400 text-xs sm:text-sm">Últimos 12 meses</p>
-                  </div>
-                </div>
-                <span className="text-blue-400 font-bold text-lg sm:text-xl">+8.2%</span>
-              </div>
-
-              <div className="flex items-center justify-between p-4 sm:p-6 bg-purple-500/10 border border-purple-500/30 rounded-xl sm:rounded-2xl">
-                <div className="flex items-center">
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 bg-purple-500/20 rounded-lg sm:rounded-xl flex items-center justify-center mr-3 sm:mr-4">
-                    <svg className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="font-semibold text-white text-sm sm:text-base lg:text-lg">Tiempo activo</p>
-                    <p className="text-gray-400 text-xs sm:text-sm">Desde el inicio</p>
-                  </div>
-                </div>
-                <span className="text-purple-400 font-bold text-lg sm:text-xl">24 meses</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Métricas Adicionales */}
-          <div className="bg-gray-900/50 backdrop-blur-sm rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-6 lg:p-8 border-2 border-gray-700/50 hover:border-green-500/30 transition-all duration-300">
-            <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white mb-6 sm:mb-8">Métricas Adicionales</h3>
-            <div className="space-y-4 sm:space-y-6">
-              <div className="p-4 sm:p-6 bg-dark-bgTertiary/50 rounded-xl sm:rounded-2xl border border-gray-700/50">
-                <div className="flex items-center justify-between mb-3 sm:mb-4">
-                  <span className="text-gray-400 font-medium text-sm sm:text-base">Total Contratos</span>
-                  <div className="w-6 h-6 sm:w-8 sm:h-8 bg-indigo-500/20 rounded-lg flex items-center justify-center">
-                    <svg className="w-3 h-3 sm:w-4 sm:h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                    </svg>
-                  </div>
-                </div>
-                <div className="text-lg sm:text-xl lg:text-2xl font-bold text-white">
-                  {contractsLoading ? "Cargando..." : `$${totalAmount.toLocaleString()}`}
-                </div>
-                <div className="text-green-400 font-semibold text-xs sm:text-sm">+0% este mes</div>
-              </div>
-
-              <div className="p-4 sm:p-6 bg-dark-bgTertiary/50 rounded-xl sm:rounded-2xl border border-gray-700/50">
-                <div className="flex items-center justify-between mb-3 sm:mb-4">
-                  <span className="text-gray-400 font-medium text-sm sm:text-base">Rendimiento %</span>
-                  <div className="w-6 h-6 sm:w-8 sm:h-8 bg-purple-500/20 rounded-lg flex items-center justify-center">
-                    <svg className="w-3 h-3 sm:w-4 sm:h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M18 14v4h-4m6 0l-4-4" />
-                    </svg>
-                  </div>
-                </div>
-                <div className="text-lg sm:text-xl lg:text-2xl font-bold text-white">17.0%</div>
-                <div className="text-green-400 font-semibold text-xs sm:text-sm">+6.6% este mes</div>
-              </div>
-
-              <div className="p-4 sm:p-6 bg-dark-bgTertiary/50 rounded-xl sm:rounded-2xl border border-gray-700/50">
-                <div className="flex items-center justify-between mb-3 sm:mb-4">
-                  <span className="text-gray-400 font-medium text-sm sm:text-base">ROI Promedio</span>
-                  <div className="w-6 h-6 sm:w-8 sm:h-8 bg-orange-500/20 rounded-lg flex items-center justify-center">
-                    <svg className="w-3 h-3 sm:w-4 sm:h-4 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    </svg>
-                  </div>
-                </div>
-                <div className="text-lg sm:text-xl lg:text-2xl font-bold text-white">23.4%</div>
-                <div className="text-green-400 font-semibold text-xs sm:text-sm">+2.1% este mes</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Tabla Detallada */}
-        <div className="bg-gray-900/50 backdrop-blur-sm rounded-2xl sm:rounded-3xl shadow-2xl border-2 border-gray-700/50 hover:border-green-500/30 transition-all duration-300 overflow-hidden">
-          <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 border-b border-gray-700/50">
-            <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white">Rendimientos Detallados</h3>
-            <p className="text-gray-400 mt-1 sm:mt-2 text-sm sm:text-base">Historial completo de tus inversiones</p>
-          </div>
-          <div className="p-4 sm:p-6 lg:p-8">
-            <SimpleRendimientosTable />
-          </div>
+          )}
         </div>
       </div>
+
+      {/* Modal de Depósito */}
+      {showDepositModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl shadow-2xl border border-gray-700 w-full max-w-md">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-white">Realizar Depósito</h2>
+                <button
+                  onClick={() => setShowDepositModal(false)}
+                  className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Monto a depositar
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">$</span>
+                    <input
+                      type="number"
+                      value={depositAmount}
+                      onChange={(e) => setDepositAmount(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full pl-8 pr-4 py-3 bg-gray-800 border border-gray-600 text-white rounded-xl placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Método de pago
+                  </label>
+                  <select
+                    value={depositMethod}
+                    onChange={(e) => setDepositMethod(e.target.value)}
+                    className="w-full px-4 py-3 bg-gray-800 border border-gray-600 text-white rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  >
+                    <option value="bank_transfer">Transferencia bancaria</option>
+                    <option value="credit_card">Tarjeta de crédito</option>
+                    <option value="debit_card">Tarjeta de débito</option>
+                    <option value="crypto">Criptomonedas</option>
+                  </select>
+                </div>
+
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-blue-400 font-medium">Información</span>
+                  </div>
+                  <p className="text-gray-300 text-sm">
+                    Los depósitos se procesan en 1-3 días hábiles. Recibirás una confirmación por email.
+                  </p>
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    onClick={handleDeposit}
+                    disabled={isProcessing}
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:from-green-700 hover:to-green-800 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-all duration-300"
+                  >
+                    {isProcessing ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Procesando...
+                      </div>
+                    ) : (
+                      'Confirmar Depósito'
+                    )}
+                  </button>
+                  
+                  <button
+                    onClick={() => setShowDepositModal(false)}
+                    disabled={isProcessing}
+                    className="flex-1 px-4 py-3 bg-gray-600 text-white rounded-xl hover:bg-gray-700 disabled:opacity-50 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Retiro */}
+      {showWithdrawalModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl shadow-2xl border border-gray-700 w-full max-w-md">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-white">Realizar Retiro</h2>
+                <button
+                  onClick={() => setShowWithdrawalModal(false)}
+                  className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                    </svg>
+                    <span className="text-green-400 font-medium">Balance Disponible</span>
+                  </div>
+                  <p className="text-white text-2xl font-bold">${totalBalance.toLocaleString()}</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Monto a retirar
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">$</span>
+                    <input
+                      type="number"
+                      value={withdrawalAmount}
+                      onChange={(e) => setWithdrawalAmount(e.target.value)}
+                      placeholder="0.00"
+                      max={totalBalance}
+                      className="w-full pl-8 pr-4 py-3 bg-gray-800 border border-gray-600 text-white rounded-xl placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Método de retiro
+                  </label>
+                  <select
+                    value={withdrawalMethod}
+                    onChange={(e) => setWithdrawalMethod(e.target.value)}
+                    className="w-full px-4 py-3 bg-gray-800 border border-gray-600 text-white rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="bank_transfer">Transferencia bancaria</option>
+                    <option value="debit_card">Tarjeta de débito</option>
+                    <option value="crypto">Criptomonedas</option>
+                  </select>
+                </div>
+
+                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <svg className="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                    <span className="text-yellow-400 font-medium">Importante</span>
+                  </div>
+                  <p className="text-gray-300 text-sm">
+                    Los retiros pueden tardar 2-5 días hábiles en procesarse. Se aplicarán las comisiones correspondientes.
+                  </p>
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    onClick={handleWithdrawal}
+                    disabled={isProcessing}
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-all duration-300"
+                  >
+                    {isProcessing ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Procesando...
+                      </div>
+                    ) : (
+                      'Confirmar Retiro'
+                    )}
+                  </button>
+                  
+                  <button
+                    onClick={() => setShowWithdrawalModal(false)}
+                    disabled={isProcessing}
+                    className="flex-1 px-4 py-3 bg-gray-600 text-white rounded-xl hover:bg-gray-700 disabled:opacity-50 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Notificación de mensaje */}
+      {message && (
+        <div className="fixed top-4 right-4 z-50 animate-slideIn">
+          <div className={`px-6 py-4 rounded-xl shadow-lg border ${
+            message.type === 'success' 
+              ? 'bg-green-500/10 border-green-500/30 text-green-400' 
+              : 'bg-red-500/10 border-red-500/30 text-red-400'
+          }`}>
+            <div className="flex items-center gap-3">
+              {message.type === 'success' ? (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              )}
+              <span className="font-medium">{message.text}</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

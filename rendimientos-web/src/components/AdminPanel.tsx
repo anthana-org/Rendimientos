@@ -3,6 +3,7 @@ import { UserService } from '../services/userService';
 import { ContractService } from '../services/contractService';
 import { RendimientoGenerator } from '../services/rendimientoGenerator';
 import { RendimientosService } from '../services/rendimientosService';
+import { PerformanceChart } from './PerformanceChart';
 import * as XLSX from 'xlsx';
 
 interface User {
@@ -247,13 +248,13 @@ export const AdminPanel: React.FC = () => {
     
     if (selectedUsers.length === 0) {
       setError('Selecciona al menos un usuario');
-      return;
-    }
+        return;
+      }
 
     if (!newContract.amount || !newContract.startDate || !newContract.duration || !newContract.rendimiento) {
       setError('Todos los campos son requeridos');
-      return;
-    }
+        return;
+      }
 
     if (parseFloat(newContract.amount) <= 0) {
       setError('El monto debe ser mayor a 0');
@@ -635,7 +636,7 @@ export const AdminPanel: React.FC = () => {
                   <div className="flex justify-between text-xs text-blue-200 mb-1">
                     <span>{contractProgress.current}/{contractProgress.total}</span>
                     <span>{Math.round((contractProgress.current / contractProgress.total) * 100)}%</span>
-                  </div>
+        </div>
                   <div className="w-full bg-gray-700 rounded-full h-1.5">
                     <div 
                       className="bg-blue-500 h-full rounded-full transition-all"
@@ -655,26 +656,6 @@ export const AdminPanel: React.FC = () => {
           <h1 className="text-3xl font-bold text-white">Panel de Administración</h1>
           <div className="flex gap-3">
             <button
-              onClick={deleteAllContracts}
-              disabled={deletingContracts || initializingContracts}
-              className="px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl hover:shadow-lg hover:scale-105 transition-all duration-300 font-semibold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-              {deletingContracts ? 'Eliminando...' : 'Limpiar Contratos'}
-            </button>
-            <button
-              onClick={() => initializeContracts(true)}
-              disabled={initializingContracts || deletingContracts}
-              className="px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:shadow-lg hover:scale-105 transition-all duration-300 font-semibold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              {initializingContracts ? 'Generando...' : 'Generar Contratos'}
-            </button>
-            <button
               onClick={() => setShowBulkUserUpload(true)}
               className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:shadow-lg hover:scale-105 transition-all duration-300 font-semibold flex items-center gap-2"
             >
@@ -683,14 +664,14 @@ export const AdminPanel: React.FC = () => {
               </svg>
               Carga Masiva
             </button>
-            <button
-              onClick={() => setShowCreateUser(true)}
+        <button
+          onClick={() => setShowCreateUser(true)}
               className="px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:shadow-lg hover:scale-105 transition-all duration-300 font-semibold"
-            >
+        >
               Crear Usuario
-            </button>
+        </button>
           </div>
-        </div>
+      </div>
 
         {/* Users List */}
         <div className="bg-gray-900 rounded-xl border border-gray-700">
@@ -705,33 +686,33 @@ export const AdminPanel: React.FC = () => {
                 )}
               </h2>
               <div className="flex gap-2">
-                <button
+          <button
                   onClick={handleSelectAll}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
                 >
                   {selectedUsers.length === filteredUsers.length ? 'Deseleccionar' : 'Seleccionar'} Todos
-                </button>
+          </button>
                 {selectedUsers.length > 0 && (
-                  <button
+          <button
                     onClick={handleCreateContractClick}
                     className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
                   >
                     Crear Contrato ({selectedUsers.length})
-                  </button>
+          </button>
                 )}
-              </div>
-            </div>
+        </div>
+                </div>
             
             {/* Search */}
-            <input
-              type="text"
+                  <input
+                    type="text"
               placeholder="Buscar usuarios..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full px-4 py-2 bg-gray-800 border border-gray-600 text-white rounded-lg placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
-            />
-          </div>
-          
+                  />
+                </div>
+            
           <div className="p-6">
             {loadingUsers ? (
               <div className="text-center py-8">
@@ -740,9 +721,9 @@ export const AdminPanel: React.FC = () => {
               </div>
             ) : filteredUsers.length > 0 ? (
               <div className="max-h-96 overflow-y-auto custom-scrollbar space-y-3">
-                {filteredUsers.map((user) => (
-                  <div 
-                    key={user.uid} 
+                  {filteredUsers.map((user) => (
+                    <div
+                      key={user.uid}
                     className={`p-4 rounded-lg transition-colors ${
                       selectedUsers.includes(user.uid) 
                         ? 'bg-green-500/20 border border-green-500/50' 
@@ -785,8 +766,8 @@ export const AdminPanel: React.FC = () => {
                         )}
                       </div>
                     </div>
-                  </div>
-                ))}
+                    </div>
+                  ))}
               </div>
             ) : (
               <div className="text-center py-8">
@@ -809,14 +790,14 @@ export const AdminPanel: React.FC = () => {
               {error && (
                 <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-3 rounded-lg text-sm">
                   {error}
-                </div>
-              )}
-              
+                    </div>
+                  )}
+                  
               {success && (
                 <div className="bg-green-500/10 border border-green-500/30 text-green-400 p-3 rounded-lg text-sm">
                   {success}
-                </div>
-              )}
+                    </div>
+                  )}
 
               <input
                 type="email"
@@ -855,10 +836,10 @@ export const AdminPanel: React.FC = () => {
                 >
                   Cancelar
                 </button>
-              </div>
+                </div>
             </form>
-          </div>
-        </div>
+              </div>
+            </div>
       )}
 
       {/* Create Contract Modal */}
@@ -1006,15 +987,15 @@ export const AdminPanel: React.FC = () => {
                             {uploadedFiles[userId].map((file, index) => (
                               <div key={index} className="flex items-center justify-between bg-gray-700 rounded px-2 py-1">
                                 <span className="text-white text-xs truncate">{file.name}</span>
-                                <button
+                      <button
                                   type="button"
                                   onClick={() => removeFile(userId, index)}
                                   className="text-red-400 hover:text-red-300 ml-2"
-                                >
+                      >
                                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                   </svg>
-                                </button>
+                      </button>
                               </div>
                             ))}
                           </div>
@@ -1023,20 +1004,20 @@ export const AdminPanel: React.FC = () => {
                     );
                   })}
                 </div>
-              </div>
+                    </div>
 
               <div className="flex gap-3 pt-4">
-                <button
+                                  <button
                   type="submit"
                   disabled={isLoading}
                   className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-                >
+                                  >
                   {isLoading ? 'Creando...' : 'Crear Contratos'}
-                </button>
+                                  </button>
                 
-                <button
+                                  <button
                   type="button"
-                  onClick={() => {
+                                    onClick={() => {
                     setShowCreateContract(false);
                     setError(null);
                     setSuccess(null);
@@ -1046,12 +1027,12 @@ export const AdminPanel: React.FC = () => {
                   className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
                 >
                   Cancelar
-                </button>
-              </div>
+                                  </button>
+                                </div>
             </form>
           </div>
-        </div>
-      )}
+                        </div>
+                      )}
 
       {/* User Complete History Modal */}
       {showUserContracts && selectedUserData && (
@@ -1065,7 +1046,7 @@ export const AdminPanel: React.FC = () => {
                     <span className="text-white font-bold text-2xl">
                       {selectedUserData.email.charAt(0).toUpperCase()}
                     </span>
-                  </div>
+                    </div>
                   <div>
                     <h2 className="text-3xl font-bold text-white">{selectedUserData.email}</h2>
                     <p className="text-gray-400">ID: {selectedUserData.uid}</p>
@@ -1082,14 +1063,14 @@ export const AdminPanel: React.FC = () => {
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                    </svg>
                 </button>
-              </div>
-            </div>
+                  </div>
+                </div>
             
             <div className="p-6 space-y-6 max-h-[calc(90vh-120px)] overflow-y-auto">
               {/* Resumen General */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-gradient-to-br from-green-900/30 to-green-800/30 rounded-xl p-4 border border-green-500/30">
                   <p className="text-green-400 text-sm font-medium mb-1">Total Invertido</p>
                   <p className="text-white text-2xl font-bold">
@@ -1101,15 +1082,9 @@ export const AdminPanel: React.FC = () => {
                   <p className="text-white text-2xl font-bold">
                     {selectedUserContracts.filter(c => c.status === 'active').length}
                   </p>
-                </div>
-                <div className="bg-gradient-to-br from-purple-900/30 to-purple-800/30 rounded-xl p-4 border border-purple-500/30">
-                  <p className="text-purple-400 text-sm font-medium mb-1">Rendimientos Generados</p>
-                  <p className="text-white text-2xl font-bold">
-                    {selectedUserRendimientos.length}
-                  </p>
-                </div>
-              </div>
-
+            </div>
+          </div>
+          
               {/* Tabla de Contratos */}
               <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
                 <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
@@ -1129,38 +1104,59 @@ export const AdminPanel: React.FC = () => {
                           <th className="text-left py-3 px-4 text-gray-400 font-medium">Rendimiento</th>
                           <th className="text-left py-3 px-4 text-gray-400 font-medium">Inicio</th>
                           <th className="text-left py-3 px-4 text-gray-400 font-medium">Vencimiento</th>
+                          <th className="text-left py-3 px-4 text-gray-400 font-medium">Días Restantes</th>
                           <th className="text-left py-3 px-4 text-gray-400 font-medium">Estado</th>
                           <th className="text-left py-3 px-4 text-gray-400 font-medium">Acción</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {selectedUserContracts.map((contract) => (
-                          <tr key={contract.id} className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors">
-                            <td className="py-3 px-4 text-white font-medium">{contract.contractType}</td>
-                            <td className="py-3 px-4 text-white">${contract.investmentAmount?.toLocaleString() || 'N/A'}</td>
-                            <td className="py-3 px-4 text-green-400 font-bold">{contract.monthlyReturn || 0}%</td>
-                            <td className="py-3 px-4 text-gray-300 text-sm">{contract.startDate}</td>
-                            <td className="py-3 px-4 text-gray-300 text-sm">{contract.expirationDate}</td>
-                            <td className="py-3 px-4">
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                contract.status === 'active' ? 'bg-green-500/20 text-green-400' :
-                                contract.status === 'inactive' ? 'bg-gray-500/20 text-gray-400' :
-                                'bg-red-500/20 text-red-400'
-                              }`}>
-                                {contract.status === 'active' ? 'Activo' : 
-                                 contract.status === 'inactive' ? 'Inactivo' : 'Vencido'}
-                              </span>
-                            </td>
-                            <td className="py-3 px-4">
-                              <button
-                                onClick={() => handleViewContractDetails(contract)}
-                                className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                              >
-                                Ver PDFs
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
+                        {selectedUserContracts.map((contract) => {
+                          // Calcular días restantes
+                          const now = new Date();
+                          const expirationDate = new Date(contract.expirationDate);
+                          const timeDiff = expirationDate.getTime() - now.getTime();
+                          const daysRemaining = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+                          
+                          return (
+                            <tr key={contract.id} className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors">
+                              <td className="py-3 px-4 text-white font-medium">{contract.contractType}</td>
+                              <td className="py-3 px-4 text-white">${contract.investmentAmount?.toLocaleString() || 'N/A'}</td>
+                              <td className="py-3 px-4 text-green-400 font-bold">{contract.monthlyReturn || 0}%</td>
+                              <td className="py-3 px-4 text-gray-300 text-sm">{contract.startDate}</td>
+                              <td className="py-3 px-4 text-gray-300 text-sm">{contract.expirationDate}</td>
+                              <td className="py-3 px-4">
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                  daysRemaining > 30 ? 'bg-green-500/20 text-green-400' :
+                                  daysRemaining > 7 ? 'bg-yellow-500/20 text-yellow-400' :
+                                  daysRemaining > 0 ? 'bg-red-500/20 text-red-400' :
+                                  'bg-gray-500/20 text-gray-400'
+                                }`}>
+                                  {daysRemaining > 0 ? `${daysRemaining} días` : 
+                                   daysRemaining === 0 ? 'Hoy' : 
+                                   `${Math.abs(daysRemaining)} días vencido`}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4">
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                  contract.status === 'active' ? 'bg-green-500/20 text-green-400' :
+                                  contract.status === 'inactive' ? 'bg-gray-500/20 text-gray-400' :
+                                  'bg-red-500/20 text-red-400'
+                                }`}>
+                                  {contract.status === 'active' ? 'Activo' : 
+                                   contract.status === 'inactive' ? 'Inactivo' : 'Vencido'}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4">
+                                <button
+                                  onClick={() => handleViewContractDetails(contract)}
+                                  className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                                >
+                                  Ver PDFs
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -1171,58 +1167,48 @@ export const AdminPanel: React.FC = () => {
                 )}
               </div>
 
-              {/* Tabla de Rendimientos */}
-              <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
-                <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                  <svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                  </svg>
-                  Rendimientos Históricos ({selectedUserRendimientos.length})
-                </h3>
-                
-                {loadingRendimientos ? (
-                  <div className="text-center py-8">
-                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-700 border-t-green-500"></div>
-                    <p className="text-gray-400 mt-2">Cargando rendimientos...</p>
-                  </div>
-                ) : selectedUserRendimientos.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-gray-700">
-                          <th className="text-left py-3 px-4 text-gray-400 font-medium">Período</th>
-                          <th className="text-left py-3 px-4 text-gray-400 font-medium">Capital</th>
-                          <th className="text-left py-3 px-4 text-gray-400 font-medium">Rendimiento %</th>
-                          <th className="text-left py-3 px-4 text-gray-400 font-medium">Ganancia</th>
-                          <th className="text-left py-3 px-4 text-gray-400 font-medium">Balance Final</th>
-                          <th className="text-left py-3 px-4 text-gray-400 font-medium">Notas</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedUserRendimientos.slice(0, 20).map((rendimiento, index) => (
-                          <tr key={index} className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors">
-                            <td className="py-3 px-4 text-white font-medium">{rendimiento.period}</td>
-                            <td className="py-3 px-4 text-white">${rendimiento.capital?.toLocaleString() || 'N/A'}</td>
-                            <td className="py-3 px-4 text-blue-400 font-bold">{rendimiento.rendimientoPercent || 0}%</td>
-                            <td className="py-3 px-4 text-green-400 font-bold">+${rendimiento.rendimientoAmount?.toLocaleString() || 'N/A'}</td>
-                            <td className="py-3 px-4 text-white font-bold">${rendimiento.balance?.toLocaleString() || 'N/A'}</td>
-                            <td className="py-3 px-4 text-gray-400 text-sm">{rendimiento.notes || '-'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {selectedUserRendimientos.length > 20 && (
-                      <p className="text-gray-400 text-sm mt-3 text-center">
-                        Mostrando 20 de {selectedUserRendimientos.length} rendimientos
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <p className="text-gray-400">No hay rendimientos generados aún</p>
-                  </div>
-                )}
+              {/* Gráfica de Rendimientos */}
+              <div className="mb-6">
+                <PerformanceChart 
+                  data={(() => {
+                    // Filtrar solo contratos activos y ordenar por fecha de inicio
+                    const activeContracts = selectedUserContracts
+                      .filter(contract => contract.status === 'active')
+                      .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+                    
+                    // Calcular crecimiento acumulativo
+                    let cumulativeAmount = 0;
+                    let cumulativeBalance = 0;
+                    
+                    return activeContracts.map((contract, index) => {
+                      const contractAmount = contract.investmentAmount || 0;
+                      const monthlyReturn = contract.monthlyReturn || 0;
+                      const monthsElapsed = Math.max(1, Math.ceil(
+                        (new Date().getTime() - new Date(contract.startDate).getTime()) / (1000 * 60 * 60 * 24 * 30)
+                      ));
+                      
+                      // Calcular rendimiento acumulado hasta ahora
+                      const monthlyReturnAmount = contractAmount * (monthlyReturn / 100);
+                      const totalReturnAmount = monthlyReturnAmount * monthsElapsed;
+                      
+                      cumulativeAmount += contractAmount;
+                      cumulativeBalance += contractAmount + totalReturnAmount;
+                      
+                      return {
+                        period: `${contract.contractType} - ${new Date(contract.startDate).toLocaleDateString('es-MX', { month: 'short', year: 'numeric' })}`,
+                        capital: contractAmount,
+                        rendimientoAmount: totalReturnAmount,
+                        balance: cumulativeBalance,
+                        contractType: contract.contractType,
+                        monthlyReturn: monthlyReturn,
+                        monthsElapsed: monthsElapsed
+                      };
+                    });
+                  })()}
+                  height={400}
+                />
               </div>
+
             </div>
           </div>
         </div>
@@ -1248,7 +1234,7 @@ export const AdminPanel: React.FC = () => {
                 </button>
               </div>
             </div>
-            
+
             <div className="p-6 space-y-6">
               {/* Información del Contrato */}
               <div className="bg-gray-800/50 rounded-xl p-4">
@@ -1257,27 +1243,27 @@ export const AdminPanel: React.FC = () => {
                   <div>
                     <p className="text-gray-400 text-sm">ID del Contrato</p>
                     <p className="text-white font-medium">{selectedContract.id}</p>
-                  </div>
+              </div>
                   <div>
                     <p className="text-gray-400 text-sm">Tipo</p>
                     <p className="text-white font-medium">{selectedContract.contractType}</p>
-                  </div>
+                </div>
                   <div>
                     <p className="text-gray-400 text-sm">Monto Inicial</p>
                     <p className="text-white font-medium">${selectedContract.investmentAmount?.toLocaleString()}</p>
-                  </div>
+              </div>
                   <div>
                     <p className="text-gray-400 text-sm">Rendimiento Mensual</p>
                     <p className="text-green-400 font-medium">{selectedContract.monthlyReturn}%</p>
-                  </div>
+                </div>
                   <div>
                     <p className="text-gray-400 text-sm">Fecha de Inicio</p>
                     <p className="text-white font-medium">{selectedContract.startDate}</p>
-                  </div>
+              </div>
                   <div>
                     <p className="text-gray-400 text-sm">Fecha de Vencimiento</p>
                     <p className="text-white font-medium">{selectedContract.expirationDate}</p>
-                  </div>
+                </div>
                   <div>
                     <p className="text-gray-400 text-sm">Estado</p>
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -1293,8 +1279,8 @@ export const AdminPanel: React.FC = () => {
                     <p className="text-gray-400 text-sm">Días Restantes</p>
                     <p className="text-white font-medium">{selectedContract.remainingDays || 'N/A'}</p>
                   </div>
-                </div>
               </div>
+            </div>
 
               {/* Sección de PDFs */}
               <div className="bg-gray-800/50 rounded-xl p-4">
@@ -1318,24 +1304,24 @@ export const AdminPanel: React.FC = () => {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                       </svg>
                       <span className="text-white">Anexos_Financieros.pdf</span>
-                    </div>
+                </div>
                     <button className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm">
                       Ver
                     </button>
-                  </div>
-
+              </div>
+              
                   <div className="border-2 border-dashed border-gray-600 rounded-lg p-4 text-center">
                     <svg className="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
+                  </svg>
                     <p className="text-gray-400 text-sm">Subir nuevo documento</p>
                     <input type="file" accept=".pdf" className="hidden" id="upload-pdf" />
                     <label htmlFor="upload-pdf" className="inline-block mt-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm cursor-pointer">
                       Seleccionar PDF
                     </label>
-                  </div>
                 </div>
-              </div>
+                                </div>
+                              </div>
 
               <div className="flex gap-3">
                 <button
@@ -1344,9 +1330,9 @@ export const AdminPanel: React.FC = () => {
                 >
                   Cerrar
                 </button>
-              </div>
-            </div>
-          </div>
+                                </div>
+                              </div>
+                            </div>
         </div>
       )}
 
@@ -1359,19 +1345,19 @@ export const AdminPanel: React.FC = () => {
               <p className="text-gray-400 text-sm mt-1">
                 Sube un archivo Excel (.xls, .xlsx) con las columnas: email, password
               </p>
-            </div>
+                    </div>
             
             <div className="p-6 space-y-4">
               {error && (
                 <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-3 rounded-lg text-sm">
                   {error}
-                </div>
-              )}
+                      </div>
+                    )}
               
               {success && (
                 <div className="bg-green-500/10 border border-green-500/30 text-green-400 p-3 rounded-lg text-sm">
                   {success}
-                </div>
+                  </div>
               )}
 
               {bulkUploadProgress && (
@@ -1406,12 +1392,12 @@ export const AdminPanel: React.FC = () => {
                       </tr>
                     </tbody>
                   </table>
-                </div>
+            </div>
                 <p className="text-gray-400 text-xs mt-2">
                   * La contraseña debe tener al menos 6 caracteres
                 </p>
-              </div>
-
+          </div>
+          
               {/* File Upload */}
               <div className="border-2 border-dashed border-gray-600 rounded-lg p-6 text-center hover:border-blue-500 transition-colors">
                 <input
@@ -1495,14 +1481,14 @@ export const AdminPanel: React.FC = () => {
                         <span className="text-gray-400">Contrato:</span> {contract.contractType}
                       </p>
                       <div className="grid grid-cols-2 gap-3 mt-2">
-                        <div>
+              <div>
                           <p className="text-gray-400 text-xs">Monto</p>
                           <p className="text-green-400 font-semibold">${contract.investmentAmount.toLocaleString()}</p>
-                        </div>
-                        <div>
+              </div>
+              <div>
                           <p className="text-gray-400 text-xs">Vence el</p>
                           <p className="text-red-300 font-semibold">{new Date(contract.expirationDate).toLocaleDateString('es-MX')}</p>
-                        </div>
+              </div>
                       </div>
                     </div>
                   </div>
@@ -1511,14 +1497,14 @@ export const AdminPanel: React.FC = () => {
             </div>
 
             <div className="p-6 border-t border-red-500/30 flex gap-3">
-              <button
+                <button
                 onClick={() => setShowExpiringAlert(false)}
                 className="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold"
-              >
+                >
                 Entendido
-              </button>
-              <button
-                onClick={() => {
+                </button>
+                <button
+                  onClick={() => {
                   setShowExpiringAlert(false);
                   // Recargar en 5 minutos
                   setTimeout(() => checkExpiringContracts(), 5 * 60 * 1000);
@@ -1526,8 +1512,8 @@ export const AdminPanel: React.FC = () => {
                 className="flex-1 px-6 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors font-semibold"
               >
                 Recordar en 5 min
-              </button>
-            </div>
+                </button>
+              </div>
           </div>
         </div>
       )}
