@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { ContractService } from '../services/contractService';
 import { PerformanceChart } from '../components/PerformanceChart';
+import jsPDF from 'jspdf';
 
 interface Contract {
   id: string;
@@ -43,6 +44,10 @@ export default function DashboardPage() {
   const [withdrawalMethod, setWithdrawalMethod] = useState('bank_transfer');
   const [isProcessing, setIsProcessing] = useState(false);
   const [message, setMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
+  
+  // Estados para modal de detalles del contrato
+  const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
+  const [showContractDetails, setShowContractDetails] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -142,6 +147,132 @@ export default function DashboardPage() {
   const getMonthlyROI = () => {
     if (totalInvested === 0) return 0;
     return (monthlyGains / totalInvested * 100).toFixed(2);
+  };
+
+  const exportContractToPDF = () => {
+    if (!selectedContract) return;
+
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    let yPosition = 20;
+
+    // Configuración de colores
+    const primaryColor = [34, 197, 94]; // Verde
+    const secondaryColor = [107, 114, 128]; // Gris
+    const textColor = [31, 41, 55]; // Gris oscuro
+
+    // Header
+    doc.setFillColor(...primaryColor);
+    doc.rect(0, 0, pageWidth, 30, 'F');
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(24);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Rendimientos', 20, 20);
+    
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Detalles del Contrato', 20, 25);
+
+    yPosition = 45;
+
+    // Información del contrato
+    doc.setTextColor(...textColor);
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Información del Contrato', 20, yPosition);
+    yPosition += 10;
+
+    // Línea separadora
+    doc.setDrawColor(...primaryColor);
+    doc.setLineWidth(0.5);
+    doc.line(20, yPosition, pageWidth - 20, yPosition);
+    yPosition += 15;
+
+    // Detalles del contrato
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+
+    const contractDetails = [
+      { label: 'ID del Contrato:', value: selectedContract.id },
+      { label: 'Tipo:', value: selectedContract.contractType },
+      { label: 'Monto Inicial:', value: `$${selectedContract.investmentAmount?.toLocaleString() || 'N/A'}` },
+      { label: 'Rendimiento Mensual:', value: `${selectedContract.monthlyReturn || 0}%` },
+      { label: 'Fecha de Inicio:', value: selectedContract.startDate },
+      { label: 'Fecha de Vencimiento:', value: selectedContract.expirationDate },
+      { label: 'Estado:', value: selectedContract.status === 'active' ? 'Activo' : 
+                                  selectedContract.status === 'inactive' ? 'Inactivo' : 'Vencido' }
+    ];
+
+    contractDetails.forEach((detail) => {
+      if (yPosition > pageHeight - 20) {
+        doc.addPage();
+        yPosition = 20;
+      }
+
+      doc.setTextColor(...secondaryColor);
+      doc.setFont('helvetica', 'bold');
+      doc.text(detail.label, 20, yPosition);
+      
+      doc.setTextColor(...textColor);
+      doc.setFont('helvetica', 'normal');
+      doc.text(detail.value, 80, yPosition);
+      
+      yPosition += 8;
+    });
+
+    // Información del usuario
+    if (user) {
+      yPosition += 10;
+      
+      doc.setTextColor(...textColor);
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Información del Usuario', 20, yPosition);
+      yPosition += 10;
+
+      // Línea separadora
+      doc.setDrawColor(...primaryColor);
+      doc.line(20, yPosition, pageWidth - 20, yPosition);
+      yPosition += 15;
+
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+
+      const userDetails = [
+        { label: 'Email:', value: user.email }
+      ];
+
+      userDetails.forEach((detail) => {
+        if (yPosition > pageHeight - 20) {
+          doc.addPage();
+          yPosition = 20;
+        }
+
+        doc.setTextColor(...secondaryColor);
+        doc.setFont('helvetica', 'bold');
+        doc.text(detail.label, 20, yPosition);
+        
+        doc.setTextColor(...textColor);
+        doc.setFont('helvetica', 'normal');
+        doc.text(detail.value, 80, yPosition);
+        
+        yPosition += 8;
+      });
+    }
+
+    // Footer
+    yPosition = pageHeight - 20;
+    doc.setTextColor(...secondaryColor);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Generado el ${new Date().toLocaleDateString('es-MX')} a las ${new Date().toLocaleTimeString('es-MX')}`, 20, yPosition);
+    doc.text('Sistema de Gestión de Rendimientos', pageWidth - 20, yPosition, { align: 'right' });
+
+    // Descargar el PDF
+    const fileName = `contrato_${selectedContract.id}_${new Date().toISOString().split('T')[0]}.pdf`;
+    doc.save(fileName);
   };
 
   const handleDeposit = async () => {
@@ -345,7 +476,14 @@ export default function DashboardPage() {
                     const daysRemaining = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
                     
                     return (
-                      <tr key={contract.id} className="border-b border-gray-700/30 hover:bg-gray-800/30 transition-colors">
+                      <tr 
+                        key={contract.id} 
+                        className="border-b border-gray-700/30 hover:bg-gray-800/30 transition-colors cursor-pointer"
+                        onClick={() => {
+                          setSelectedContract(contract);
+                          setShowContractDetails(true);
+                        }}
+                      >
                         <td className="py-4 px-6 text-white font-medium">{contract.contractType}</td>
                         <td className="py-4 px-6 text-white">${contract.investmentAmount?.toLocaleString() || 'N/A'}</td>
                         <td className="py-4 px-6 text-green-400 font-bold">{contract.monthlyReturn || 0}%</td>
@@ -609,6 +747,162 @@ export default function DashboardPage() {
                 </svg>
               )}
               <span className="font-medium">{message.text}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Detalles del Contrato */}
+      {showContractDetails && selectedContract && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl shadow-2xl border border-gray-700 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-700">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-white">Detalles del Contrato</h2>
+                  <p className="text-gray-400">{selectedContract.contractType}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={exportContractToPDF}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Exportar PDF
+                  </button>
+                  <button
+                    onClick={() => setShowContractDetails(false)}
+                    className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          
+            <div className="p-6 space-y-6">
+              {/* Información del Contrato */}
+              <div className="bg-gray-800/50 rounded-xl p-4">
+                <h3 className="text-lg font-semibold text-white mb-4">Información del Contrato</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-gray-400 text-sm">ID del Contrato</p>
+                    <p className="text-white font-medium">{selectedContract.id}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400 text-sm">Tipo</p>
+                    <p className="text-white font-medium">{selectedContract.contractType}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400 text-sm">Monto Inicial</p>
+                    <p className="text-white font-medium">${selectedContract.investmentAmount?.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400 text-sm">Rendimiento Mensual</p>
+                    <p className="text-green-400 font-medium">{selectedContract.monthlyReturn}%</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400 text-sm">Fecha de Inicio</p>
+                    <p className="text-white font-medium">{selectedContract.startDate}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400 text-sm">Fecha de Vencimiento</p>
+                    <p className="text-white font-medium">{selectedContract.expirationDate}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400 text-sm">Estado</p>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      selectedContract.status === 'active' ? 'bg-green-500/20 text-green-400' :
+                      selectedContract.status === 'inactive' ? 'bg-gray-500/20 text-gray-400' :
+                      'bg-red-500/20 text-red-400'
+                    }`}>
+                      {selectedContract.status === 'active' ? 'Activo' : 
+                       selectedContract.status === 'inactive' ? 'Inactivo' : 'Vencido'}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-gray-400 text-sm">Días Restantes</p>
+                    <p className="text-white font-medium">
+                      {(() => {
+                        const now = new Date();
+                        const expirationDate = new Date(selectedContract.expirationDate);
+                        const timeDiff = expirationDate.getTime() - now.getTime();
+                        const daysRemaining = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+                        return daysRemaining > 0 ? `${daysRemaining} días` : 
+                               daysRemaining === 0 ? 'Hoy' : 
+                               `${Math.abs(daysRemaining)} días vencido`;
+                      })()}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sección de PDFs */}
+              <div className="bg-gray-800/50 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-white">Documentos PDF</h3>
+                </div>
+                
+                {/* Mostrar PDF del contrato si existe */}
+                {selectedContract.pdfUrl ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <div>
+                          <p className="text-white font-medium">{selectedContract.pdfFileName || 'Contrato.pdf'}</p>
+                          <p className="text-gray-400 text-sm">
+                            Contrato principal • {new Date().toLocaleDateString('es-MX')}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => window.open(selectedContract.pdfUrl, '_blank')}
+                          className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm flex items-center gap-1"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                          Ver
+                        </button>
+                        <button
+                          onClick={() => {
+                            const link = document.createElement('a');
+                            link.href = selectedContract.pdfUrl!;
+                            link.download = selectedContract.pdfFileName || 'contrato.pdf';
+                            link.click();
+                          }}
+                          className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm flex items-center gap-1"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          Descargar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* Mostrar mensaje cuando no hay documentos */
+                  <div className="text-center py-8">
+                    <div className="w-16 h-16 bg-gray-700/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <p className="text-gray-400 mb-4">No hay documentos subidos para este contrato</p>
+                    <p className="text-gray-500 text-sm mb-6">Contacta al administrador para obtener el contrato</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

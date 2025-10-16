@@ -3,6 +3,9 @@ import { UserService } from '../services/userService';
 import { ContractService } from '../services/contractService';
 import { PerformanceChart } from './PerformanceChart';
 import * as XLSX from 'xlsx';
+import { storage } from '../firebase';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import jsPDF from 'jspdf';
 
 interface User {
   uid: string;
@@ -20,6 +23,8 @@ interface Contract {
   expirationDate: string;
   status: string;
   remainingDays?: number;
+  pdfUrl?: string;
+  pdfFileName?: string;
 }
 
 export default function AdminPanel() {
@@ -44,6 +49,8 @@ export default function AdminPanel() {
     status: 'active',
     rendimiento: ''
   });
+  const [contractPdfFile, setContractPdfFile] = useState<File | null>(null);
+  const [uploadingPdf, setUploadingPdf] = useState(false);
   
   // Estados para historial de usuario
   const [selectedUserContracts, setSelectedUserContracts] = useState<Contract[]>([]);
@@ -56,6 +63,13 @@ export default function AdminPanel() {
   const [showBulkUserUpload, setShowBulkUserUpload] = useState(false);
   const [bulkUploadFile, setBulkUploadFile] = useState<File | null>(null);
   const [bulkUploadProgress, setBulkUploadProgress] = useState('');
+  
+  // Estados para subida de documentos
+  const [showDocumentUpload, setShowDocumentUpload] = useState(false);
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [documentName, setDocumentName] = useState('');
+  const [uploadingDocument, setUploadingDocument] = useState(false);
+  const [uploadedDocuments, setUploadedDocuments] = useState<any[]>([]);
 
   useEffect(() => {
     loadUsers();
@@ -89,8 +103,8 @@ export default function AdminPanel() {
   };
 
   const filteredUsers = users.filter(user =>
-    user.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+        user.email.toLowerCase().includes(searchTerm.toLowerCase())
+      );
 
   const handleSelectUser = (userId: string) => {
     setSelectedUsers(prev => 
@@ -139,6 +153,7 @@ export default function AdminPanel() {
   const handleCreateContract = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setUploadingPdf(true);
     setError(null);
     setSuccess(null);
 
@@ -146,6 +161,24 @@ export default function AdminPanel() {
       let successCount = 0;
       let errorCount = 0;
       const errors: string[] = [];
+      let pdfUrl = '';
+
+      // Upload PDF if provided
+      if (contractPdfFile) {
+        try {
+          const timestamp = Date.now();
+          const fileName = `contracts/contract_${timestamp}_${contractPdfFile.name}`;
+          const storageRef = ref(storage, fileName);
+          
+          await uploadBytes(storageRef, contractPdfFile);
+          pdfUrl = await getDownloadURL(storageRef);
+        } catch (uploadError: any) {
+          setError(`Error subiendo PDF: ${uploadError.message}`);
+          setIsLoading(false);
+          setUploadingPdf(false);
+          return;
+        }
+      }
 
       for (const userId of selectedUsers) {
         const user = users.find(u => u.uid === userId);
@@ -163,7 +196,9 @@ export default function AdminPanel() {
           monthlyReturn: parseFloat(newContract.rendimiento),
           startDate: startDate.toISOString().split('T')[0],
           expirationDate: endDate.toISOString().split('T')[0],
-          status: newContract.status as "active" | "inactive" | "expired"
+          status: newContract.status as "active" | "inactive" | "expired",
+          pdfUrl: pdfUrl || null,
+          pdfFileName: contractPdfFile?.name || null
         };
 
         const result = await ContractService.createContract(contractData);
@@ -186,12 +221,15 @@ export default function AdminPanel() {
       if (successCount > 0) {
         setNewContract({ amount: '', startDate: '', duration: '1', status: 'active', rendimiento: '' });
         setSelectedUsers([]);
+        setContractPdfFile(null);
         setShowCreateContract(false);
+        loadUsers();
       }
     } catch (err: any) {
       setError(err.message || 'Error al crear contratos');
     } finally {
       setIsLoading(false);
+      setUploadingPdf(false);
     }
   };
 
@@ -201,6 +239,221 @@ export default function AdminPanel() {
       ...prev,
       [name]: value
     }));
+  };
+
+  const exportContractToPDF = () => {
+    if (!selectedContract) return;
+
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    let yPosition = 20;
+
+    // Configuración de colores
+    const primaryColor = [34, 197, 94]; // Verde
+    const secondaryColor = [107, 114, 128]; // Gris
+    const textColor = [31, 41, 55]; // Gris oscuro
+
+    // Header
+    doc.setFillColor(...primaryColor);
+    doc.rect(0, 0, pageWidth, 30, 'F');
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(24);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Rendimientos', 20, 20);
+    
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Detalles del Contrato', 20, 25);
+
+    yPosition = 45;
+
+    // Información del contrato
+    doc.setTextColor(...textColor);
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Información del Contrato', 20, yPosition);
+    yPosition += 10;
+
+    // Línea separadora
+    doc.setDrawColor(...primaryColor);
+    doc.setLineWidth(0.5);
+    doc.line(20, yPosition, pageWidth - 20, yPosition);
+    yPosition += 15;
+
+    // Detalles del contrato
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+
+    const contractDetails = [
+      { label: 'ID del Contrato:', value: selectedContract.id },
+      { label: 'Tipo:', value: selectedContract.contractType },
+      { label: 'Monto Inicial:', value: `$${selectedContract.investmentAmount?.toLocaleString() || 'N/A'}` },
+      { label: 'Rendimiento Mensual:', value: `${selectedContract.monthlyReturn || 0}%` },
+      { label: 'Fecha de Inicio:', value: selectedContract.startDate },
+      { label: 'Fecha de Vencimiento:', value: selectedContract.expirationDate },
+      { label: 'Estado:', value: selectedContract.status === 'active' ? 'Activo' : 
+                                  selectedContract.status === 'inactive' ? 'Inactivo' : 'Vencido' },
+      { label: 'Días Restantes:', value: selectedContract.remainingDays?.toString() || 'N/A' }
+    ];
+
+    contractDetails.forEach((detail, index) => {
+      if (yPosition > pageHeight - 20) {
+        doc.addPage();
+        yPosition = 20;
+      }
+
+      doc.setTextColor(...secondaryColor);
+      doc.setFont('helvetica', 'bold');
+      doc.text(detail.label, 20, yPosition);
+      
+      doc.setTextColor(...textColor);
+      doc.setFont('helvetica', 'normal');
+      doc.text(detail.value, 80, yPosition);
+      
+      yPosition += 8;
+    });
+
+    // Información del usuario si está disponible
+    if (selectedUserData) {
+      yPosition += 10;
+      
+      doc.setTextColor(...textColor);
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Información del Usuario', 20, yPosition);
+      yPosition += 10;
+
+      // Línea separadora
+      doc.setDrawColor(...primaryColor);
+      doc.line(20, yPosition, pageWidth - 20, yPosition);
+      yPosition += 15;
+
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+
+      const userDetails = [
+        { label: 'Email:', value: selectedUserData.email },
+        { label: 'Fecha de Registro:', value: new Date(selectedUserData.createdAt).toLocaleDateString('es-MX') }
+      ];
+
+      userDetails.forEach((detail) => {
+        if (yPosition > pageHeight - 20) {
+          doc.addPage();
+          yPosition = 20;
+        }
+
+        doc.setTextColor(...secondaryColor);
+        doc.setFont('helvetica', 'bold');
+        doc.text(detail.label, 20, yPosition);
+        
+        doc.setTextColor(...textColor);
+        doc.setFont('helvetica', 'normal');
+        doc.text(detail.value, 80, yPosition);
+        
+        yPosition += 8;
+      });
+    }
+
+    // Footer
+    yPosition = pageHeight - 20;
+    doc.setTextColor(...secondaryColor);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Generado el ${new Date().toLocaleDateString('es-MX')} a las ${new Date().toLocaleTimeString('es-MX')}`, 20, yPosition);
+    doc.text('Sistema de Gestión de Rendimientos', pageWidth - 20, yPosition, { align: 'right' });
+
+    // Descargar el PDF
+    const fileName = `contrato_${selectedContract.id}_${new Date().toISOString().split('T')[0]}.pdf`;
+    doc.save(fileName);
+  };
+
+  const handleDeleteUsers = async () => {
+    if (selectedUsers.length === 0) {
+      setError('Selecciona al menos un usuario para eliminar');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `¿Estás seguro de que quieres eliminar ${selectedUsers.length} usuario(s)? Esta acción no se puede deshacer.`
+    );
+
+    if (!confirmed) return;
+
+    setIsLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      let successCount = 0;
+      let errorCount = 0;
+      const errors: string[] = [];
+
+      for (const userId of selectedUsers) {
+        const user = users.find(u => u.uid === userId);
+        if (!user) continue;
+
+        const result = await UserService.deleteUser(userId);
+        if (result.success) {
+          successCount++;
+        } else {
+          errorCount++;
+          errors.push(`${user.email}: ${result.error}`);
+        }
+      }
+
+      if (successCount > 0) {
+        setSuccess(`✅ ${successCount} usuario(s) eliminado(s) exitosamente${errorCount > 0 ? `. ${errorCount} errores.` : ''}`);
+        setSelectedUsers([]);
+        loadUsers();
+      }
+      
+      if (errorCount > 0 && successCount === 0) {
+        setError(`Error eliminando usuarios: ${errors.join(', ')}`);
+      }
+    } catch (err: any) {
+      setError(`Error: ${err.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteContract = async () => {
+    if (!selectedContract) return;
+
+    const confirmed = window.confirm(
+      `¿Estás seguro de que quieres eliminar el contrato "${selectedContract.contractType}"? Esta acción no se puede deshacer.`
+    );
+
+    if (!confirmed) return;
+
+    setIsLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const result = await ContractService.deleteContract(selectedContract.id);
+      
+      if (result.success) {
+        setSuccess('✅ Contrato eliminado exitosamente');
+        setShowContractDetails(false);
+        setSelectedContract(null);
+        // Recargar los contratos del usuario si estamos viendo contratos de un usuario específico
+        if (selectedUserData) {
+          const contractsResult = await ContractService.getContractsByUser(selectedUserData.uid);
+          if (contractsResult.success && contractsResult.data) {
+            setSelectedUserContracts(contractsResult.data);
+          }
+        }
+      } else {
+        setError(`Error eliminando contrato: ${result.error}`);
+      }
+    } catch (err: any) {
+      setError(`Error: ${err.message}`);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleViewUserContracts = async (user: User) => {
@@ -221,6 +474,90 @@ export default function AdminPanel() {
   const handleViewContractDetails = (contract: Contract) => {
     setSelectedContract(contract);
     setShowContractDetails(true);
+    // Cargar documentos existentes del contrato
+    loadContractDocuments(contract.id);
+  };
+
+  const loadContractDocuments = async (contractId: string) => {
+    try {
+      // Simular carga de documentos desde Firebase
+      // En una implementación real, esto vendría de Firebase Storage
+      const mockDocuments = [
+        // Los documentos se cargarían dinámicamente desde Firebase
+      ];
+      setUploadedDocuments(mockDocuments);
+    } catch (error) {
+      console.error('Error cargando documentos:', error);
+      setUploadedDocuments([]);
+    }
+  };
+
+  const handleDocumentFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validar que sea PDF
+      if (file.type !== 'application/pdf') {
+        setError('Solo se permiten archivos PDF');
+        return;
+      }
+
+      // Validar tamaño (máximo 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        setError('El archivo no puede ser mayor a 10MB');
+        return;
+      }
+
+      setDocumentFile(file);
+      // Generar nombre automático si no se proporciona
+      if (!documentName) {
+        setDocumentName(file.name.replace('.pdf', ''));
+      }
+    }
+  };
+
+  const handleDocumentUpload = async () => {
+    if (!documentFile || !selectedContract || !documentName.trim()) {
+      setError('Por favor completa todos los campos');
+      return;
+    }
+
+    setUploadingDocument(true);
+    setError(null);
+
+    try {
+      // Simular subida a Firebase Storage
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Crear objeto del documento subido
+      const newDocument = {
+        id: Date.now().toString(),
+        name: documentName.trim(),
+        fileName: documentFile.name,
+        size: documentFile.size,
+        contractId: selectedContract.id,
+        uploadedAt: new Date().toISOString(),
+        url: `#` // En implementación real sería la URL de Firebase Storage
+      };
+
+      // Agregar a la lista de documentos
+      setUploadedDocuments(prev => [...prev, newDocument]);
+      
+      setSuccess('Documento subido exitosamente');
+      setDocumentFile(null);
+      setDocumentName('');
+      setShowDocumentUpload(false);
+      
+    } catch (error: any) {
+      setError('Error subiendo el documento: ' + error.message);
+    } finally {
+      setUploadingDocument(false);
+    }
+  };
+
+  const handleDownloadDocument = (document: any) => {
+    // En implementación real, esto descargaría desde Firebase Storage
+    console.log('Descargando documento:', document.name);
+    setSuccess(`Descargando ${document.name}...`);
   };
 
   const handleBulkUploadFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -267,7 +604,7 @@ export default function AdminPanel() {
           // Simular creación de usuario
           console.log('Creando usuario:', email);
           successCount++;
-        } catch (err: any) {
+    } catch (err: any) {
           errorCount++;
           errors.push(`${email}: ${err.message}`);
         }
@@ -294,41 +631,41 @@ export default function AdminPanel() {
   return (
     <div className="min-h-screen bg-black p-8">
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
+      {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-white">Panel de Administración</h1>
           <div className="flex gap-3">
-            <button
+        <button
               onClick={() => setShowBulkUserUpload(true)}
               className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:shadow-lg hover:scale-105 transition-all duration-300 font-semibold flex items-center gap-2"
-            >
+        >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
               </svg>
               Carga Masiva
-            </button>
-            <button
+        </button>
+          <button
               onClick={() => setShowCreateUser(true)}
               className="px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:shadow-lg hover:scale-105 transition-all duration-300 font-semibold"
             >
               Crear Usuario
-            </button>
-          </div>
-        </div>
+          </button>
+      </div>
+      </div>
 
         {/* Mensajes */}
-        {error && (
+      {error && (
           <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl">
             {error}
-          </div>
-        )}
+        </div>
+      )}
         {success && (
           <div className="mb-6 p-4 bg-green-500/10 border border-green-500/30 text-green-400 rounded-xl">
             {success}
-          </div>
-        )}
+        </div>
+      )}
 
-        {/* Lista de Usuarios */}
+            {/* Lista de Usuarios */}
         <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl shadow-2xl border border-gray-700 overflow-hidden">
           <div className="p-6 border-b border-gray-700">
             <div className="flex justify-between items-center mb-4">
@@ -348,26 +685,38 @@ export default function AdminPanel() {
                   {selectedUsers.length === filteredUsers.length ? 'Deseleccionar' : 'Seleccionar'} Todos
                 </button>
                 {selectedUsers.length > 0 && (
-                  <button
-                    onClick={handleCreateContractClick}
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
-                  >
-                    Crear Contrato ({selectedUsers.length})
-                  </button>
+                  <>
+                    <button
+                      onClick={handleCreateContractClick}
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
+                    >
+                      Crear Contrato ({selectedUsers.length})
+                    </button>
+                    <button
+                      onClick={handleDeleteUsers}
+                      disabled={isLoading}
+                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      Eliminar ({selectedUsers.length})
+                    </button>
+                  </>
                 )}
               </div>
-            </div>
+                </div>
             
             {/* Search */}
-            <input
-              type="text"
+                  <input
+                    type="text"
               placeholder="Buscar usuarios..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full px-4 py-2 bg-gray-800 border border-gray-600 text-white rounded-lg placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-green-500"
-            />
-          </div>
-          
+                  />
+                </div>
+            
           <div className="p-6">
             {loadingUsers ? (
               <div className="text-center py-8">
@@ -376,9 +725,9 @@ export default function AdminPanel() {
               </div>
             ) : filteredUsers.length > 0 ? (
               <div className="max-h-96 overflow-y-auto custom-scrollbar space-y-3">
-                {filteredUsers.map((user) => (
-                  <div 
-                    key={user.uid} 
+                  {filteredUsers.map((user) => (
+                    <div
+                      key={user.uid}
                     className={`p-4 rounded-lg transition-colors ${
                       selectedUsers.includes(user.uid) 
                         ? 'bg-green-500/20 border border-green-500/50' 
@@ -405,8 +754,8 @@ export default function AdminPanel() {
                               Creado: {new Date(user.createdAt).toLocaleDateString('es-MX')}
                             </p>
                           )}
-                        </div>
-                      </div>
+                    </div>
+                    </div>
                       <div className="flex items-center space-x-3">
                         <button
                           onClick={() => handleViewUserContracts(user)}
@@ -421,17 +770,17 @@ export default function AdminPanel() {
                         )}
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                    </div>
+                  ))}
+                    </div>
             ) : (
               <div className="text-center py-8">
                 <p className="text-gray-400">No hay usuarios registrados</p>
+                    </div>
+                  )}
+                </div>
               </div>
-            )}
-          </div>
-        </div>
-      </div>
+            </div>
 
       {/* Modal Crear Usuario */}
       {showCreateUser && (
@@ -440,15 +789,15 @@ export default function AdminPanel() {
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold text-white">Crear Usuario</h2>
-                <button
+                      <button
                   onClick={() => setShowCreateUser(false)}
                   className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
-                >
+                      >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
-                </button>
-              </div>
+                      </button>
+                    </div>
 
               <form onSubmit={handleCreateUser} className="space-y-4">
                 <div>
@@ -478,27 +827,27 @@ export default function AdminPanel() {
                 </div>
 
                 <div className="flex gap-3 pt-4">
-                  <button
+                                  <button
                     type="submit"
                     disabled={isLoading}
                     className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-                  >
+                                  >
                     {isLoading ? 'Creando...' : 'Crear Usuario'}
-                  </button>
+                                  </button>
                   
-                  <button
+                                  <button
                     type="button"
                     onClick={() => setShowCreateUser(false)}
                     className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
                   >
                     Cancelar
-                  </button>
-                </div>
+                                  </button>
+                                </div>
               </form>
-            </div>
-          </div>
-        </div>
-      )}
+                        </div>
+                    </div>
+                  </div>
+                      )}
 
       {/* Modal Crear Contrato */}
       {showCreateContract && (
@@ -513,9 +862,9 @@ export default function AdminPanel() {
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                    </svg>
                 </button>
-              </div>
+                  </div>
 
               <form onSubmit={handleCreateContract} className="space-y-4">
                 <div>
@@ -532,8 +881,8 @@ export default function AdminPanel() {
                       required
                       className="w-full pl-8 pr-4 py-2 bg-gray-800 border border-gray-600 text-white rounded-lg"
                     />
-                  </div>
                 </div>
+            </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -547,8 +896,8 @@ export default function AdminPanel() {
                     required
                     className="w-full px-4 py-2 bg-gray-800 border border-gray-600 text-white rounded-lg"
                   />
-                </div>
-
+          </div>
+          
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Duración del Contrato
@@ -582,8 +931,8 @@ export default function AdminPanel() {
                     max="100"
                     className="w-full px-4 py-2 bg-gray-800 border border-gray-600 text-white rounded-lg"
                     placeholder="5.5"
-                  />
-                </div>
+            />
+          </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -601,14 +950,50 @@ export default function AdminPanel() {
                   </select>
                 </div>
 
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Contrato PDF (Opcional)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          if (file.type !== 'application/pdf') {
+                            setError('Solo se permiten archivos PDF');
+                            return;
+                          }
+                          if (file.size > 10 * 1024 * 1024) { // 10MB limit
+                            setError('El archivo PDF no puede ser mayor a 10MB');
+                            return;
+                          }
+                          setContractPdfFile(file);
+                          setError('');
+                        }
+                      }}
+                      className="w-full px-4 py-2 bg-gray-800 border border-gray-600 text-white rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-600 file:text-white hover:file:bg-green-700"
+                    />
+                  </div>
+                  {contractPdfFile && (
+                    <div className="mt-2 flex items-center gap-2 text-sm text-green-400">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      {contractPdfFile.name}
+                    </div>
+                  )}
+                </div>
+
                 <div className="flex gap-3 pt-4">
-                  <button
+                <button
                     type="submit"
-                    disabled={isLoading}
+                    disabled={isLoading || uploadingPdf}
                     className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
                   >
-                    {isLoading ? 'Creando...' : 'Crear Contratos'}
-                  </button>
+                    {isLoading || uploadingPdf ? (uploadingPdf ? 'Subiendo PDF...' : 'Creando...') : 'Crear Contratos'}
+                </button>
                   
                   <button
                     type="button"
@@ -617,11 +1002,11 @@ export default function AdminPanel() {
                   >
                     Cancelar
                   </button>
-                </div>
+              </div>
               </form>
-            </div>
-          </div>
-        </div>
+                </div>
+              </div>
+                </div>
       )}
 
       {/* Modal Carga Masiva */}
@@ -658,12 +1043,12 @@ export default function AdminPanel() {
                     onChange={handleBulkUploadFile}
                     className="w-full px-4 py-2 bg-gray-800 border border-gray-600 text-white rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-600 file:text-white hover:file:bg-green-700"
                   />
-                </div>
+              </div>
 
                 {bulkUploadProgress && (
                   <div className="bg-gray-800 rounded-lg p-3">
                     <p className="text-gray-300 text-sm">{bulkUploadProgress}</p>
-                  </div>
+            </div>
                 )}
 
                 <div className="flex gap-3 pt-4">
@@ -719,9 +1104,9 @@ export default function AdminPanel() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
-              </div>
-            </div>
-            
+                </div>
+                                </div>
+
             <div className="p-6 space-y-6 max-h-[calc(90vh-120px)] overflow-y-auto">
               {/* Resumen General */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -730,15 +1115,15 @@ export default function AdminPanel() {
                   <p className="text-white text-2xl font-bold">
                     ${selectedUserContracts.reduce((sum, c) => sum + (c.investmentAmount || 0), 0).toLocaleString()}
                   </p>
-                </div>
+                              </div>
                 <div className="bg-gradient-to-br from-blue-900/30 to-blue-800/30 rounded-xl p-4 border border-blue-500/30">
                   <p className="text-blue-400 text-sm font-medium mb-1">Contratos Activos</p>
                   <p className="text-white text-2xl font-bold">
                     {selectedUserContracts.filter(c => c.status === 'active').length}
                   </p>
-                </div>
-              </div>
-
+                                </div>
+                              </div>
+              
               {/* Gráfica de Rendimientos */}
               <div className="mb-6">
                 <PerformanceChart 
@@ -779,7 +1164,7 @@ export default function AdminPanel() {
                   })()}
                   height={400}
                 />
-              </div>
+                            </div>
 
               {/* Tabla de Contratos */}
               <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
@@ -802,9 +1187,8 @@ export default function AdminPanel() {
                           <th className="text-left py-3 px-4 text-gray-400 font-medium">Vencimiento</th>
                           <th className="text-left py-3 px-4 text-gray-400 font-medium">Días Restantes</th>
                           <th className="text-left py-3 px-4 text-gray-400 font-medium">Estado</th>
-                          <th className="text-left py-3 px-4 text-gray-400 font-medium">Acción</th>
-                        </tr>
-                      </thead>
+                      </tr>
+                    </thead>
                       <tbody>
                         {selectedUserContracts.map((contract) => {
                           // Calcular días restantes
@@ -814,7 +1198,14 @@ export default function AdminPanel() {
                           const daysRemaining = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
                           
                           return (
-                            <tr key={contract.id} className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors">
+                            <tr 
+                              key={contract.id} 
+                              className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors cursor-pointer"
+                              onClick={() => {
+                                setSelectedContract(contract);
+                                setShowContractDetails(true);
+                              }}
+                            >
                               <td className="py-3 px-4 text-white font-medium">{contract.contractType}</td>
                               <td className="py-3 px-4 text-white">${contract.investmentAmount?.toLocaleString() || 'N/A'}</td>
                               <td className="py-3 px-4 text-green-400 font-bold">{contract.monthlyReturn || 0}%</td>
@@ -830,8 +1221,8 @@ export default function AdminPanel() {
                                   {daysRemaining > 0 ? `${daysRemaining} días` : 
                                    daysRemaining === 0 ? 'Hoy' : 
                                    `${Math.abs(daysRemaining)} días vencido`}
-                                </span>
-                              </td>
+                            </span>
+                          </td>
                               <td className="py-3 px-4">
                                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                                   contract.status === 'active' ? 'bg-green-500/20 text-green-400' :
@@ -840,32 +1231,24 @@ export default function AdminPanel() {
                                 }`}>
                                   {contract.status === 'active' ? 'Activo' : 
                                    contract.status === 'inactive' ? 'Inactivo' : 'Vencido'}
-                                </span>
-                              </td>
-                              <td className="py-3 px-4">
-                                <button
-                                  onClick={() => handleViewContractDetails(contract)}
-                                  className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                                >
-                                  Ver PDFs
-                                </button>
-                              </td>
-                            </tr>
+                            </span>
+                          </td>
+                        </tr>
                           );
                         })}
-                      </tbody>
-                    </table>
-                  </div>
+                    </tbody>
+                  </table>
+                    </div>
                 ) : (
                   <div className="text-center py-8">
                     <p className="text-gray-400">No hay contratos registrados</p>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+                </div>
+                  </div>
+                </div>
+              )}
 
       {/* Contract Details Modal */}
       {showContractDetails && selectedContract && (
@@ -877,42 +1260,63 @@ export default function AdminPanel() {
                   <h2 className="text-2xl font-bold text-white">Detalles del Contrato</h2>
                   <p className="text-gray-400">{selectedContract.contractType}</p>
                 </div>
-                <button
-                  onClick={() => setShowContractDetails(false)}
-                  className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={exportContractToPDF}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Exportar PDF
+                  </button>
+                  <button
+                    onClick={handleDeleteContract}
+                    disabled={isLoading}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Eliminar
+                  </button>
+                  <button
+                    onClick={() => setShowContractDetails(false)}
+                    className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
-            
+          
             <div className="p-6 space-y-6">
               {/* Información del Contrato */}
               <div className="bg-gray-800/50 rounded-xl p-4">
                 <h3 className="text-lg font-semibold text-white mb-4">Información del Contrato</h3>
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
+              <div>
                     <p className="text-gray-400 text-sm">ID del Contrato</p>
                     <p className="text-white font-medium">{selectedContract.id}</p>
-                  </div>
-                  <div>
+          </div>
+              <div>
                     <p className="text-gray-400 text-sm">Tipo</p>
                     <p className="text-white font-medium">{selectedContract.contractType}</p>
-                  </div>
+        </div>
                   <div>
                     <p className="text-gray-400 text-sm">Monto Inicial</p>
                     <p className="text-white font-medium">${selectedContract.investmentAmount?.toLocaleString()}</p>
-                  </div>
+              </div>
                   <div>
                     <p className="text-gray-400 text-sm">Rendimiento Mensual</p>
                     <p className="text-green-400 font-medium">{selectedContract.monthlyReturn}%</p>
-                  </div>
+          </div>
                   <div>
                     <p className="text-gray-400 text-sm">Fecha de Inicio</p>
                     <p className="text-white font-medium">{selectedContract.startDate}</p>
-                  </div>
+        </div>
                   <div>
                     <p className="text-gray-400 text-sm">Fecha de Vencimiento</p>
                     <p className="text-white font-medium">{selectedContract.expirationDate}</p>
@@ -937,46 +1341,209 @@ export default function AdminPanel() {
 
               {/* Sección de PDFs */}
               <div className="bg-gray-800/50 rounded-xl p-4">
-                <h3 className="text-lg font-semibold text-white mb-4">Documentos PDF</h3>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      <div>
-                        <p className="text-white font-medium">Contrato_Original.pdf</p>
-                        <p className="text-gray-400 text-sm">2.4 MB</p>
-                      </div>
-                    </div>
-                    <button className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm">
-                      Descargar
-                    </button>
-                  </div>
-                  
-                  <div className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      <div>
-                        <p className="text-white font-medium">Anexos_Adicionales.pdf</p>
-                        <p className="text-gray-400 text-sm">1.8 MB</p>
-                      </div>
-                    </div>
-                    <button className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm">
-                      Descargar
-                    </button>
-                  </div>
-                </div>
-                
-                <div className="mt-4 pt-4 border-t border-gray-700">
-                  <button className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
-                    Subir Nuevo Documento
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-white">Documentos PDF</h3>
+                  <button
+                    onClick={() => setShowDocumentUpload(true)}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    Subir Documento
                   </button>
                 </div>
+                
+                {/* Mostrar PDF del contrato si existe */}
+                {selectedContract.pdfUrl ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <div>
+                          <p className="text-white font-medium">{selectedContract.pdfFileName || 'Contrato.pdf'}</p>
+                          <p className="text-gray-400 text-sm">
+                            Contrato principal • {new Date().toLocaleDateString('es-MX')}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => window.open(selectedContract.pdfUrl, '_blank')}
+                          className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm flex items-center gap-1"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                          Ver
+                        </button>
+                        <button
+                          onClick={() => {
+                            const link = document.createElement('a');
+                            link.href = selectedContract.pdfUrl!;
+                            link.download = selectedContract.pdfFileName || 'contrato.pdf';
+                            link.click();
+                          }}
+                          className="px-3 py-1 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm flex items-center gap-1"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          Descargar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* Mostrar mensaje cuando no hay documentos */
+                  <div className="text-center py-8">
+                    <div className="w-16 h-16 bg-gray-700/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <p className="text-gray-400 mb-4">No hay documentos subidos para este contrato</p>
+                    <p className="text-gray-500 text-sm mb-6">Sube el contrato original y documentos adicionales cuando estén listos</p>
+                  </div>
+                )}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Subir Documento */}
+      {showDocumentUpload && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl shadow-2xl border border-gray-700 w-full max-w-md">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-white">Subir Documento PDF</h2>
+                <button
+                  onClick={() => {
+                    setShowDocumentUpload(false);
+                    setDocumentFile(null);
+                    setDocumentName('');
+                    setError(null);
+                  }}
+                  className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Información del contrato */}
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4">
+                  <h3 className="text-blue-400 font-medium mb-2">Contrato</h3>
+                  <p className="text-white">{selectedContract?.contractType}</p>
+                  <p className="text-gray-400 text-sm">ID: {selectedContract?.id}</p>
+                </div>
+
+                {/* Nombre del documento */}
+              <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Nombre del documento
+                </label>
+                <input
+                    type="text"
+                    value={documentName}
+                    onChange={(e) => setDocumentName(e.target.value)}
+                    placeholder="Ej: Contrato Original, Anexos..."
+                    className="w-full px-4 py-2 bg-gray-800 border border-gray-600 text-white rounded-lg placeholder-gray-400"
+                />
+              </div>
+
+                {/* Selección de archivo */}
+              <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Seleccionar archivo PDF
+                </label>
+                  <div className="border-2 border-dashed border-gray-600 rounded-lg p-6 text-center hover:border-green-500 transition-colors">
+                <input
+                      type="file"
+                      accept=".pdf"
+                      onChange={handleDocumentFileChange}
+                      className="hidden"
+                      id="document-upload"
+                    />
+                    <label
+                      htmlFor="document-upload"
+                      className="cursor-pointer flex flex-col items-center space-y-2"
+                    >
+                      <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                      <span className="text-gray-400">
+                        {documentFile ? documentFile.name : 'Haz clic para seleccionar un PDF'}
+                      </span>
+                      <span className="text-gray-500 text-sm">Máximo 10MB</span>
+                    </label>
+              </div>
+                  {documentFile && (
+                    <div className="mt-2 p-2 bg-green-500/10 border border-green-500/30 rounded-lg">
+                      <p className="text-green-400 text-sm">
+                        ✓ Archivo seleccionado: {(documentFile.size / 1024 / 1024).toFixed(1)} MB
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Información adicional */}
+                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <svg className="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-yellow-400 font-medium">Información</span>
+                  </div>
+                  <p className="text-gray-300 text-sm">
+                    El documento se almacenará de forma segura y estará disponible para descarga en cualquier momento.
+                  </p>
+                </div>
+
+                {/* Botones */}
+                <div className="flex gap-3 pt-4">
+                <button
+                    onClick={handleDocumentUpload}
+                    disabled={uploadingDocument || !documentFile || !documentName.trim()}
+                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {uploadingDocument ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Subiendo...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        Subir Documento
+                      </>
+                    )}
+                </button>
+                  
+                <button
+                  onClick={() => {
+                      setShowDocumentUpload(false);
+                      setDocumentFile(null);
+                      setDocumentName('');
+                      setError(null);
+                    }}
+                    disabled={uploadingDocument}
+                    className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+              </div>
+          </div>
+        </div>
           </div>
         </div>
       )}

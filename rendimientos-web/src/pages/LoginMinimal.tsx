@@ -133,6 +133,44 @@ export default function LoginMinimal() {
           </p>
         </div>
 
+        {/* Back to Home Button */}
+        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 16px',
+              backgroundColor: 'transparent',
+              border: '1px solid rgba(156, 163, 175, 0.3)',
+              borderRadius: '8px',
+              color: '#9ca3af',
+              fontSize: '14px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              textDecoration: 'none'
+            }}
+            onMouseOver={(e) => {
+              (e.target as HTMLButtonElement).style.backgroundColor = 'rgba(156, 163, 175, 0.1)';
+              (e.target as HTMLButtonElement).style.borderColor = 'rgba(156, 163, 175, 0.5)';
+              (e.target as HTMLButtonElement).style.color = '#d1d5db';
+            }}
+            onMouseOut={(e) => {
+              (e.target as HTMLButtonElement).style.backgroundColor = 'transparent';
+              (e.target as HTMLButtonElement).style.borderColor = 'rgba(156, 163, 175, 0.3)';
+              (e.target as HTMLButtonElement).style.color = '#9ca3af';
+            }}
+          >
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Volver al inicio
+          </button>
+        </div>
+
         {/* Form */}
         <form onSubmit={handleSubmit} style={{ marginBottom: '32px' }}>
           {/* Email Field */}
@@ -377,47 +415,6 @@ export default function LoginMinimal() {
           }}>
             © 2024 Rendimientos. Todos los derechos reservados.
           </p>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'center',
-            gap: '16px'
-          }}>
-            <a href="#" style={{
-              fontSize: '14px',
-              color: '#9ca3af',
-              textDecoration: 'none',
-              transition: 'color 0.2s'
-            }}
-            onMouseOver={(e) => (e.target as HTMLButtonElement).style.color = '#22c55e'}
-            onMouseOut={(e) => (e.target as HTMLButtonElement).style.color = '#9ca3af'}
-            >
-              Términos
-            </a>
-            <span style={{ color: '#6b7280' }}>•</span>
-            <a href="#" style={{
-              fontSize: '14px',
-              color: '#9ca3af',
-              textDecoration: 'none',
-              transition: 'color 0.2s'
-            }}
-            onMouseOver={(e) => (e.target as HTMLButtonElement).style.color = '#22c55e'}
-            onMouseOut={(e) => (e.target as HTMLButtonElement).style.color = '#9ca3af'}
-            >
-              Privacidad
-            </a>
-            <span style={{ color: '#6b7280' }}>•</span>
-            <a href="#" style={{
-              fontSize: '14px',
-              color: '#9ca3af',
-              textDecoration: 'none',
-              transition: 'color 0.2s'
-            }}
-            onMouseOver={(e) => (e.target as HTMLButtonElement).style.color = '#22c55e'}
-            onMouseOut={(e) => (e.target as HTMLButtonElement).style.color = '#9ca3af'}
-            >
-              Soporte
-            </a>
-          </div>
         </div>
       </div>
 

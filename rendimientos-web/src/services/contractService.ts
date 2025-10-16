@@ -35,6 +35,8 @@ export interface ContractExpiration {
   remainingDays: number;
   daysRemaining: number;
   contractDuration: number;
+  pdfUrl?: string;
+  pdfFileName?: string;
 }
 
 export interface ExpirationConfig {
@@ -59,6 +61,22 @@ export class ContractService {
       return { success: true, id: docRef.id };
     } catch (error: any) {
       console.error('Error creando contrato:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  static async deleteContract(contractId: string): Promise<{ success: boolean; error?: string }> {
+    if (!db) {
+      return { success: false, error: 'Firestore no está configurado' };
+    }
+
+    try {
+      const contractRef = doc(db, 'contracts', contractId);
+      await deleteDoc(contractRef);
+      
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error eliminando contrato:', error);
       return { success: false, error: error.message };
     }
   }
@@ -95,7 +113,9 @@ export class ContractService {
           lastNotification: data.lastNotification || '',
           remainingDays,
           daysRemaining: remainingDays,
-          contractDuration
+          contractDuration,
+          pdfUrl: data.pdfUrl || null,
+          pdfFileName: data.pdfFileName || null
         });
       });
 
@@ -143,7 +163,9 @@ export class ContractService {
           lastNotification: data.lastNotification || '',
           remainingDays,
           daysRemaining: remainingDays,
-          contractDuration
+          contractDuration,
+          pdfUrl: data.pdfUrl || null,
+          pdfFileName: data.pdfFileName || null
         });
       });
 

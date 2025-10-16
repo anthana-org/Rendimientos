@@ -1,4 +1,4 @@
-import { doc, setDoc, getDoc, collection, query, where, orderBy, limit, getDocs, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, query, where, orderBy, limit, getDocs, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
 export interface UserData {
@@ -199,6 +199,25 @@ export class UserService {
       }
     } catch (error: any) {
       console.error('Error buscando usuario por email:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Eliminar un usuario
+   */
+  static async deleteUser(uid: string): Promise<{ success: boolean; error?: string }> {
+    if (!db) {
+      return { success: false, error: 'Firestore no está configurado' };
+    }
+
+    try {
+      const userRef = doc(db, 'users', uid);
+      await deleteDoc(userRef);
+      
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error eliminando usuario:', error);
       return { success: false, error: error.message };
     }
   }
