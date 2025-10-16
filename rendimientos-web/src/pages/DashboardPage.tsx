@@ -12,6 +12,9 @@ interface Contract {
   startDate: string;
   expirationDate: string;
   status: string;
+  remainingDays?: number;
+  pdfUrl?: string;
+  pdfFileName?: string;
 }
 
 interface Rendimiento {
@@ -158,9 +161,9 @@ export default function DashboardPage() {
     let yPosition = 20;
 
     // Configuración de colores
-    const primaryColor = [34, 197, 94]; // Verde
-    const secondaryColor = [107, 114, 128]; // Gris
-    const textColor = [31, 41, 55]; // Gris oscuro
+    const primaryColor: [number, number, number] = [34, 197, 94]; // Verde
+    const secondaryColor: [number, number, number] = [107, 114, 128]; // Gris
+    const textColor: [number, number, number] = [31, 41, 55]; // Gris oscuro
 
     // Header
     doc.setFillColor(...primaryColor);
@@ -211,13 +214,13 @@ export default function DashboardPage() {
         yPosition = 20;
       }
 
-      doc.setTextColor(...secondaryColor);
-      doc.setFont('helvetica', 'bold');
-      doc.text(detail.label, 20, yPosition);
-      
-      doc.setTextColor(...textColor);
-      doc.setFont('helvetica', 'normal');
-      doc.text(detail.value, 80, yPosition);
+            doc.setTextColor(...secondaryColor);
+            doc.setFont('helvetica', 'bold');
+            doc.text(detail.label, 20, yPosition);
+            
+            doc.setTextColor(...textColor);
+            doc.setFont('helvetica', 'normal');
+            doc.text(detail.value || '', 80, yPosition);
       
       yPosition += 8;
     });
@@ -256,7 +259,7 @@ export default function DashboardPage() {
         
         doc.setTextColor(...textColor);
         doc.setFont('helvetica', 'normal');
-        doc.text(detail.value, 80, yPosition);
+        doc.text(detail.value || '', 80, yPosition);
         
         yPosition += 8;
       });
@@ -864,7 +867,7 @@ export default function DashboardPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => window.open(selectedContract.pdfUrl, '_blank')}
+                          onClick={() => selectedContract.pdfUrl && window.open(selectedContract.pdfUrl, '_blank')}
                           className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm flex items-center gap-1"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -875,10 +878,12 @@ export default function DashboardPage() {
                         </button>
                         <button
                           onClick={() => {
-                            const link = document.createElement('a');
-                            link.href = selectedContract.pdfUrl!;
-                            link.download = selectedContract.pdfFileName || 'contrato.pdf';
-                            link.click();
+                            if (selectedContract.pdfUrl) {
+                              const link = document.createElement('a');
+                              link.href = selectedContract.pdfUrl;
+                              link.download = selectedContract.pdfFileName || 'contrato.pdf';
+                              link.click();
+                            }
                           }}
                           className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm flex items-center gap-1"
                         >

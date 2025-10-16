@@ -4,7 +4,7 @@ import { ContractService } from '../services/contractService';
 import { PerformanceChart } from './PerformanceChart';
 import * as XLSX from 'xlsx';
 import { storage } from '../firebase';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import jsPDF from 'jspdf';
 
 interface User {
@@ -69,7 +69,6 @@ export default function AdminPanel() {
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [documentName, setDocumentName] = useState('');
   const [uploadingDocument, setUploadingDocument] = useState(false);
-  const [uploadedDocuments, setUploadedDocuments] = useState<any[]>([]);
 
   useEffect(() => {
     loadUsers();
@@ -250,9 +249,9 @@ export default function AdminPanel() {
     let yPosition = 20;
 
     // Configuración de colores
-    const primaryColor = [34, 197, 94]; // Verde
-    const secondaryColor = [107, 114, 128]; // Gris
-    const textColor = [31, 41, 55]; // Gris oscuro
+    const primaryColor: [number, number, number] = [34, 197, 94]; // Verde
+    const secondaryColor: [number, number, number] = [107, 114, 128]; // Gris
+    const textColor: [number, number, number] = [31, 41, 55]; // Gris oscuro
 
     // Header
     doc.setFillColor(...primaryColor);
@@ -298,7 +297,7 @@ export default function AdminPanel() {
       { label: 'Días Restantes:', value: selectedContract.remainingDays?.toString() || 'N/A' }
     ];
 
-    contractDetails.forEach((detail, index) => {
+    contractDetails.forEach((detail) => {
       if (yPosition > pageHeight - 20) {
         doc.addPage();
         yPosition = 20;
@@ -310,7 +309,7 @@ export default function AdminPanel() {
       
       doc.setTextColor(...textColor);
       doc.setFont('helvetica', 'normal');
-      doc.text(detail.value, 80, yPosition);
+      doc.text(detail.value || '', 80, yPosition);
       
       yPosition += 8;
     });
@@ -350,7 +349,7 @@ export default function AdminPanel() {
         
         doc.setTextColor(...textColor);
         doc.setFont('helvetica', 'normal');
-        doc.text(detail.value, 80, yPosition);
+        doc.text(detail.value || '', 80, yPosition);
         
         yPosition += 8;
       });
@@ -471,26 +470,7 @@ export default function AdminPanel() {
     }
   };
 
-  const handleViewContractDetails = (contract: Contract) => {
-    setSelectedContract(contract);
-    setShowContractDetails(true);
-    // Cargar documentos existentes del contrato
-    loadContractDocuments(contract.id);
-  };
 
-  const loadContractDocuments = async (contractId: string) => {
-    try {
-      // Simular carga de documentos desde Firebase
-      // En una implementación real, esto vendría de Firebase Storage
-      const mockDocuments = [
-        // Los documentos se cargarían dinámicamente desde Firebase
-      ];
-      setUploadedDocuments(mockDocuments);
-    } catch (error) {
-      console.error('Error cargando documentos:', error);
-      setUploadedDocuments([]);
-    }
-  };
 
   const handleDocumentFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -529,19 +509,6 @@ export default function AdminPanel() {
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Crear objeto del documento subido
-      const newDocument = {
-        id: Date.now().toString(),
-        name: documentName.trim(),
-        fileName: documentFile.name,
-        size: documentFile.size,
-        contractId: selectedContract.id,
-        uploadedAt: new Date().toISOString(),
-        url: `#` // En implementación real sería la URL de Firebase Storage
-      };
-
-      // Agregar a la lista de documentos
-      setUploadedDocuments(prev => [...prev, newDocument]);
-      
       setSuccess('Documento subido exitosamente');
       setDocumentFile(null);
       setDocumentName('');
@@ -554,11 +521,6 @@ export default function AdminPanel() {
     }
   };
 
-  const handleDownloadDocument = (document: any) => {
-    // En implementación real, esto descargaría desde Firebase Storage
-    console.log('Descargando documento:', document.name);
-    setSuccess(`Descargando ${document.name}...`);
-  };
 
   const handleBulkUploadFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

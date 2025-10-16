@@ -232,19 +232,6 @@ export class ContractService {
     return this.updateContract(contractId, { status });
   }
 
-  static async deleteContract(contractId: string): Promise<{ success: boolean; error?: string }> {
-    if (!db) {
-      return { success: false, error: 'Firestore no está configurado' };
-    }
-
-    try {
-      await deleteDoc(doc(db, 'contracts', contractId));
-      return { success: true };
-    } catch (error: any) {
-      console.error('Error eliminando contrato:', error);
-      return { success: false, error: error.message };
-    }
-  }
 
   static async getExpirationConfig(): Promise<{ success: boolean; data?: ExpirationConfig; error?: string }> {
     if (!db) {
