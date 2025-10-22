@@ -168,7 +168,9 @@ export default function AdminPanel() {
         try {
           console.log('Subiendo PDF:', contractPdfFile.name);
           const timestamp = Date.now();
-          const fileName = `contracts/contract_${timestamp}_${contractPdfFile.name}`;
+          // Limpiar el nombre del archivo para evitar problemas con espacios y caracteres especiales
+          const cleanFileName = contractPdfFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+          const fileName = `contracts/contract_${timestamp}_${cleanFileName}`;
           const storageRef = ref(storage, fileName);
           
           await uploadBytes(storageRef, contractPdfFile);
@@ -518,8 +520,14 @@ export default function AdminPanel() {
       
       // Subir PDF a Firebase Storage
       const timestamp = Date.now();
-      const fileName = `contracts/${selectedContract.id}/document_${timestamp}_${documentFile.name}`;
+      // Limpiar el nombre del archivo para evitar problemas con espacios y caracteres especiales
+      const cleanFileName = documentFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const fileName = `contracts/${selectedContract.id}/document_${timestamp}_${cleanFileName}`;
       const storageRef = ref(storage, fileName);
+      
+      console.log('Archivo original:', documentFile.name);
+      console.log('Archivo limpio:', cleanFileName);
+      console.log('Ruta completa:', fileName);
       
       await uploadBytes(storageRef, documentFile);
       const pdfUrl = await getDownloadURL(storageRef);
