@@ -165,18 +165,23 @@ export default function AdminPanel() {
       // Upload PDF if provided
       if (contractPdfFile) {
         try {
+          console.log('Subiendo PDF:', contractPdfFile.name);
           const timestamp = Date.now();
           const fileName = `contracts/contract_${timestamp}_${contractPdfFile.name}`;
           const storageRef = ref(storage, fileName);
           
           await uploadBytes(storageRef, contractPdfFile);
           pdfUrl = await getDownloadURL(storageRef);
+          console.log('PDF subido exitosamente, URL:', pdfUrl);
         } catch (uploadError: any) {
+          console.error('Error subiendo PDF:', uploadError);
           setError(`Error subiendo PDF: ${uploadError.message}`);
           setIsLoading(false);
           setUploadingPdf(false);
           return;
         }
+      } else {
+        console.log('No hay archivo PDF para subir');
       }
 
       for (const userId of selectedUsers) {
@@ -200,6 +205,7 @@ export default function AdminPanel() {
           pdfFileName: contractPdfFile?.name || null
         };
 
+        console.log('Creando contrato con datos:', contractData);
         const result = await ContractService.createContract(contractData);
         if (result.success) {
           successCount++;
