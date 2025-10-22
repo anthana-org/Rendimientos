@@ -549,8 +549,31 @@ export default function AdminPanel() {
           setSelectedContract({
             ...selectedContract,
             pdfUrl: base64Data, // Usar base64 como URL temporal
-            pdfFileName: documentFile.name
+            pdfFileName: documentFile.name,
+            pdfData: base64Data,
+            pdfMimeType: documentFile.type
           });
+          
+          // Recargar los contratos del usuario para mostrar los cambios
+          if (selectedUserData) {
+            console.log('Recargando contratos para usuario:', selectedUserData.uid);
+            const contractsResult = await ContractService.getContractsByUser(selectedUserData.uid);
+            if (contractsResult.success && contractsResult.data) {
+              setSelectedUserContracts(contractsResult.data);
+              console.log('Contratos recargados con PDF actualizado:', contractsResult.data.length);
+              
+              // Buscar el contrato actualizado
+              const updatedContract = contractsResult.data.find(c => c.id === selectedContract.id);
+              if (updatedContract) {
+                console.log('Contrato actualizado encontrado:', {
+                  id: updatedContract.id,
+                  pdfFileName: updatedContract.pdfFileName,
+                  hasPdfData: !!updatedContract.pdfData,
+                  pdfDataLength: updatedContract.pdfData?.length || 0
+                });
+              }
+            }
+          }
           
           setSuccess('Documento subido exitosamente');
           setDocumentFile(null);
