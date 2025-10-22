@@ -3,7 +3,8 @@ import { UserService } from '../services/userService';
 import { ContractService } from '../services/contractService';
 import { PerformanceChart } from './PerformanceChart';
 import * as XLSX from 'xlsx';
-import { storage } from '../firebase';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db, storage } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import jsPDF from 'jspdf';
 
@@ -503,25 +504,52 @@ export default function AdminPanel() {
   };
 
   const handleDocumentUpload = async () => {
-    if (!documentFile || !selectedContract || !documentName.trim()) {
-      setError('Por favor completa todos los campos');
+    if (!documentFile || !selectedContract) {
+      setError('Selecciona un archivo PDF');
       return;
     }
 
     setUploadingDocument(true);
     setError(null);
+    setSuccess(null);
 
     try {
-      // Simular subida a Firebase Storage
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      console.log('Subiendo documento al contrato:', selectedContract.id);
       
-      // Crear objeto del documento subido
+      // Subir PDF a Firebase Storage
+      const timestamp = Date.now();
+      const fileName = `contracts/${selectedContract.id}/document_${timestamp}_${documentFile.name}`;
+      const storageRef = ref(storage, fileName);
+      
+      await uploadBytes(storageRef, documentFile);
+      const pdfUrl = await getDownloadURL(storageRef);
+      
+      console.log('Documento subido exitosamente, URL:', pdfUrl);
+      
+      // Actualizar el contrato en Firestore con la nueva información del PDF
+      const contractRef = doc(db, 'contracts', selectedContract.id);
+      await updateDoc(contractRef, {
+        pdfUrl: pdfUrl,
+        pdfFileName: documentFile.name,
+        updatedAt: serverTimestamp()
+      });
+      
+      console.log('Contrato actualizado en Firestore');
+      
+      // Actualizar el estado local del contrato seleccionado
+      setSelectedContract({
+        ...selectedContract,
+        pdfUrl: pdfUrl,
+        pdfFileName: documentFile.name
+      });
+      
       setSuccess('Documento subido exitosamente');
       setDocumentFile(null);
       setDocumentName('');
       setShowDocumentUpload(false);
       
     } catch (error: any) {
+      console.error('Error subiendo documento:', error);
       setError('Error subiendo el documento: ' + error.message);
     } finally {
       setUploadingDocument(false);
