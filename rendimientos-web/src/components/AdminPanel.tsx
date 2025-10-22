@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { UserService } from '../services/userService';
 import { ContractService } from '../services/contractService';
 import { PerformanceChart } from './PerformanceChart';
+import { useAuth } from '../hooks/useAuth';
 import * as XLSX from 'xlsx';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db, storage } from '../firebase';
@@ -26,9 +27,12 @@ interface Contract {
   remainingDays?: number;
   pdfUrl?: string;
   pdfFileName?: string;
+  pdfData?: string; // Base64 data
+  pdfMimeType?: string;
 }
 
 export default function AdminPanel() {
+  const { user } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -517,49 +521,57 @@ export default function AdminPanel() {
 
     try {
       console.log('Subiendo documento al contrato:', selectedContract.id);
+      console.log('Usuario autenticado:', user?.email);
       
-      // Subir PDF a Firebase Storage
-      const timestamp = Date.now();
-      // Limpiar el nombre del archivo para evitar problemas con espacios y caracteres especiales
-      const cleanFileName = documentFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const fileName = `contracts/${selectedContract.id}/document_${timestamp}_${cleanFileName}`;
-      const storageRef = ref(storage, fileName);
+      // Método alternativo: convertir archivo a base64 y guardar en Firestore
+      const reader = new FileReader();
       
-      console.log('Archivo original:', documentFile.name);
-      console.log('Archivo limpio:', cleanFileName);
-      console.log('Ruta completa:', fileName);
+      reader.onload = async (e) => {
+        try {
+          const base64Data = e.target?.result as string;
+          
+          // Guardar el PDF como base64 en Firestore
+          const contractRef = doc(db, 'contracts', selectedContract.id);
+          await updateDoc(contractRef, {
+            pdfData: base64Data,
+            pdfFileName: documentFile.name,
+            pdfMimeType: documentFile.type,
+            updatedAt: serverTimestamp()
+          });
+          
+          console.log('Documento guardado como base64 en Firestore');
+          
+          // Actualizar el estado local del contrato seleccionado
+          setSelectedContract({
+            ...selectedContract,
+            pdfUrl: base64Data, // Usar base64 como URL temporal
+            pdfFileName: documentFile.name
+          });
+          
+          setSuccess('Documento subido exitosamente');
+          setDocumentFile(null);
+          setDocumentName('');
+          setShowDocumentUpload(false);
+          
+        } catch (error: any) {
+          console.error('Error guardando documento:', error);
+          setError('Error guardando el documento: ' + error.message);
+        } finally {
+          setUploadingDocument(false);
+        }
+      };
       
-      await uploadBytes(storageRef, documentFile);
-      const pdfUrl = await getDownloadURL(storageRef);
+      reader.onerror = () => {
+        setError('Error leyendo el archivo');
+        setUploadingDocument(false);
+      };
       
-      console.log('Documento subido exitosamente, URL:', pdfUrl);
-      
-      // Actualizar el contrato en Firestore con la nueva información del PDF
-      const contractRef = doc(db, 'contracts', selectedContract.id);
-      await updateDoc(contractRef, {
-        pdfUrl: pdfUrl,
-        pdfFileName: documentFile.name,
-        updatedAt: serverTimestamp()
-      });
-      
-      console.log('Contrato actualizado en Firestore');
-      
-      // Actualizar el estado local del contrato seleccionado
-      setSelectedContract({
-        ...selectedContract,
-        pdfUrl: pdfUrl,
-        pdfFileName: documentFile.name
-      });
-      
-      setSuccess('Documento subido exitosamente');
-      setDocumentFile(null);
-      setDocumentName('');
-      setShowDocumentUpload(false);
+      // Leer el archivo como base64
+      reader.readAsDataURL(documentFile);
       
     } catch (error: any) {
       console.error('Error subiendo documento:', error);
       setError('Error subiendo el documento: ' + error.message);
-    } finally {
       setUploadingDocument(false);
     }
   };
