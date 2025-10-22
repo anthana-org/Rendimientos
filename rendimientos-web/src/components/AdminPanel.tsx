@@ -478,6 +478,16 @@ export default function AdminPanel() {
       const result = await ContractService.getContractsByUser(user.uid);
       if (result.success && result.data) {
         console.log('Contratos cargados:', result.data);
+        console.log('Detalles de PDFs en contratos cargados:');
+        result.data.forEach((contract, index) => {
+          console.log(`Contrato ${index + 1} (${contract.id}):`, {
+            pdfFileName: contract.pdfFileName,
+            hasPdfData: !!contract.pdfData,
+            pdfDataLength: contract.pdfData?.length || 0,
+            pdfUrl: contract.pdfUrl,
+            pdfMimeType: contract.pdfMimeType
+          });
+        });
         setSelectedUserContracts(result.data);
         setShowUserContracts(true);
       } else {
@@ -485,6 +495,28 @@ export default function AdminPanel() {
       }
     } catch (err: any) {
       setError('Error cargando contratos del usuario');
+    }
+  };
+
+  // Función de debug temporal para verificar datos en Firestore
+  const debugFirestoreData = async () => {
+    try {
+      console.log('=== DEBUG FIRESTORE DATA ===');
+      const result = await ContractService.getAllContracts();
+      if (result.success && result.data) {
+        console.log(`Total contratos en Firestore: ${result.data.length}`);
+        result.data.forEach((contract, index) => {
+          console.log(`\nContrato ${index + 1} (${contract.id}):`);
+          console.log(`- Tipo: ${contract.contractType}`);
+          console.log(`- Usuario: ${contract.userEmail}`);
+          console.log(`- PDF FileName: ${contract.pdfFileName || 'null'}`);
+          console.log(`- PDF Data Length: ${contract.pdfData?.length || 0}`);
+          console.log(`- PDF MimeType: ${contract.pdfMimeType || 'null'}`);
+          console.log(`- PDF URL: ${contract.pdfUrl || 'null'}`);
+        });
+      }
+    } catch (error) {
+      console.error('Error en debug:', error);
     }
   };
 
@@ -569,8 +601,15 @@ export default function AdminPanel() {
                   id: updatedContract.id,
                   pdfFileName: updatedContract.pdfFileName,
                   hasPdfData: !!updatedContract.pdfData,
-                  pdfDataLength: updatedContract.pdfData?.length || 0
+                  pdfDataLength: updatedContract.pdfData?.length || 0,
+                  pdfUrl: updatedContract.pdfUrl,
+                  pdfMimeType: updatedContract.pdfMimeType
                 });
+                
+                // Actualizar también el contrato seleccionado con los datos frescos de la base de datos
+                setSelectedContract(updatedContract);
+              } else {
+                console.error('No se encontró el contrato actualizado en la lista recargada');
               }
             }
           }
@@ -693,6 +732,12 @@ export default function AdminPanel() {
               className="px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:shadow-lg hover:scale-105 transition-all duration-300 font-semibold"
             >
               Crear Usuario
+          </button>
+          <button
+              onClick={debugFirestoreData}
+              className="px-6 py-3 bg-gradient-to-r from-yellow-600 to-yellow-700 text-white rounded-xl hover:shadow-lg hover:scale-105 transition-all duration-300 font-semibold"
+            >
+              Debug Firestore
           </button>
       </div>
       </div>
@@ -1247,6 +1292,13 @@ export default function AdminPanel() {
                               className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors cursor-pointer"
                               onClick={() => {
                                 console.log('Contrato seleccionado:', contract);
+                                console.log('Datos de PDF del contrato seleccionado:', {
+                                  pdfFileName: contract.pdfFileName,
+                                  hasPdfData: !!contract.pdfData,
+                                  pdfDataLength: contract.pdfData?.length || 0,
+                                  pdfUrl: contract.pdfUrl,
+                                  pdfMimeType: contract.pdfMimeType
+                                });
                                 setSelectedContract(contract);
                                 setShowContractDetails(true);
                               }}
@@ -1400,7 +1452,7 @@ export default function AdminPanel() {
                 </div>
                 
                 {/* Mostrar PDF del contrato si existe */}
-                {selectedContract.pdfUrl ? (
+                {(selectedContract.pdfUrl || selectedContract.pdfData) ? (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg">
                       <div className="flex items-center space-x-3">
@@ -1416,7 +1468,12 @@ export default function AdminPanel() {
                       </div>
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => window.open(selectedContract.pdfUrl, '_blank')}
+                          onClick={() => {
+                            const pdfUrl = selectedContract.pdfUrl || selectedContract.pdfData;
+                            if (pdfUrl) {
+                              window.open(pdfUrl, '_blank');
+                            }
+                          }}
                           className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm flex items-center gap-1"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1427,10 +1484,13 @@ export default function AdminPanel() {
                         </button>
                         <button
                           onClick={() => {
-                            const link = document.createElement('a');
-                            link.href = selectedContract.pdfUrl!;
-                            link.download = selectedContract.pdfFileName || 'contrato.pdf';
-                            link.click();
+                            const pdfUrl = selectedContract.pdfUrl || selectedContract.pdfData;
+                            if (pdfUrl) {
+                              const link = document.createElement('a');
+                              link.href = pdfUrl;
+                              link.download = selectedContract.pdfFileName || 'contrato.pdf';
+                              link.click();
+                            }
                           }}
                           className="px-3 py-1 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm flex items-center gap-1"
                         >
@@ -1455,6 +1515,9 @@ export default function AdminPanel() {
                     <div className="text-xs text-gray-600 mt-4">
                       <p>Debug: pdfUrl = {selectedContract.pdfUrl || 'null'}</p>
                       <p>Debug: pdfFileName = {selectedContract.pdfFileName || 'null'}</p>
+                      <p>Debug: hasPdfData = {selectedContract.pdfData ? 'true' : 'false'}</p>
+                      <p>Debug: pdfDataLength = {selectedContract.pdfData?.length || 0}</p>
+                      <p>Debug: pdfMimeType = {selectedContract.pdfMimeType || 'null'}</p>
                     </div>
                   </div>
                 )}
