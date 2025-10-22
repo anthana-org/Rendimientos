@@ -171,15 +171,17 @@ export default function AdminPanel() {
       if (contractPdfFile) {
         try {
           console.log('Subiendo PDF:', contractPdfFile.name);
-          const timestamp = Date.now();
-          // Limpiar el nombre del archivo para evitar problemas con espacios y caracteres especiales
-          const cleanFileName = contractPdfFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-          const fileName = `contracts/contract_${timestamp}_${cleanFileName}`;
-          const storageRef = ref(storage, fileName);
           
-          await uploadBytes(storageRef, contractPdfFile);
-          pdfUrl = await getDownloadURL(storageRef);
-          console.log('PDF subido exitosamente, URL:', pdfUrl);
+          // Convertir PDF a base64
+          const reader = new FileReader();
+          const base64Promise = new Promise<string>((resolve, reject) => {
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = () => reject(new Error('Error leyendo archivo'));
+            reader.readAsDataURL(contractPdfFile);
+          });
+          
+          pdfUrl = await base64Promise;
+          console.log('PDF convertido a base64 exitosamente');
         } catch (uploadError: any) {
           console.error('Error subiendo PDF:', uploadError);
           setError(`Error subiendo PDF: ${uploadError.message}`);
@@ -209,7 +211,9 @@ export default function AdminPanel() {
           expirationDate: endDate.toISOString().split('T')[0],
           status: newContract.status as "active" | "inactive" | "expired",
           pdfUrl: pdfUrl || null,
-          pdfFileName: contractPdfFile?.name || null
+          pdfFileName: contractPdfFile?.name || null,
+          pdfData: pdfUrl || null, // Base64 data
+          pdfMimeType: contractPdfFile?.type || null
         };
 
         console.log('Creando contrato con datos:', contractData);

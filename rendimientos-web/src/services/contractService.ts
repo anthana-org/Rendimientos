@@ -16,6 +16,10 @@ export interface ContractData {
   updatedAt?: any;
   remainingDays?: number;
   contractDuration?: number;
+  pdfUrl?: string;
+  pdfFileName?: string;
+  pdfData?: string;
+  pdfMimeType?: string;
 }
 
 export interface ContractExpiration {
@@ -37,6 +41,8 @@ export interface ContractExpiration {
   contractDuration: number;
   pdfUrl?: string;
   pdfFileName?: string;
+  pdfData?: string;
+  pdfMimeType?: string;
 }
 
 export interface ExpirationConfig {
@@ -115,7 +121,9 @@ export class ContractService {
           daysRemaining: remainingDays,
           contractDuration,
           pdfUrl: data.pdfUrl || null,
-          pdfFileName: data.pdfFileName || null
+          pdfFileName: data.pdfFileName || null,
+          pdfData: data.pdfData || null,
+          pdfMimeType: data.pdfMimeType || null
         });
       });
 
@@ -165,7 +173,9 @@ export class ContractService {
           daysRemaining: remainingDays,
           contractDuration,
           pdfUrl: data.pdfUrl || null,
-          pdfFileName: data.pdfFileName || null
+          pdfFileName: data.pdfFileName || null,
+          pdfData: data.pdfData || null,
+          pdfMimeType: data.pdfMimeType || null
         });
       });
 
