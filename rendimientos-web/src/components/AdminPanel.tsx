@@ -460,6 +460,7 @@ export default function AdminPanel() {
       setSelectedUserData(user);
       const result = await ContractService.getContractsByUser(user.uid);
       if (result.success && result.data) {
+        console.log('Contratos cargados:', result.data);
         setSelectedUserContracts(result.data);
         setShowUserContracts(true);
       } else {
@@ -1164,6 +1165,7 @@ export default function AdminPanel() {
                               key={contract.id} 
                               className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors cursor-pointer"
                               onClick={() => {
+                                console.log('Contrato seleccionado:', contract);
                                 setSelectedContract(contract);
                                 setShowContractDetails(true);
                               }}
@@ -1369,6 +1371,10 @@ export default function AdminPanel() {
                     </div>
                     <p className="text-gray-400 mb-4">No hay documentos subidos para este contrato</p>
                     <p className="text-gray-500 text-sm mb-6">Sube el contrato original y documentos adicionales cuando estén listos</p>
+                    <div className="text-xs text-gray-600 mt-4">
+                      <p>Debug: pdfUrl = {selectedContract.pdfUrl || 'null'}</p>
+                      <p>Debug: pdfFileName = {selectedContract.pdfFileName || 'null'}</p>
+                    </div>
                   </div>
                 )}
               </div>
