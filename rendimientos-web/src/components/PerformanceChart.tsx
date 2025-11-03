@@ -126,13 +126,13 @@ export const PerformanceChart: React.FC<PerformanceChartProps> = ({
           
           {/* Y-axis label */}
           <text 
-            x={10} 
+            x={15} 
             y={chartHeight / 2} 
-            transform="rotate(-90 10 center)" 
+            transform="rotate(-90 15 center)" 
             textAnchor="middle" 
             className="text-sm fill-gray-300 font-semibold"
           >
-            Patrimonio ($)
+            $
           </text>
           
           {/* Area under curve */}

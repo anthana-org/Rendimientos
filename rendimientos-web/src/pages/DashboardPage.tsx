@@ -279,7 +279,7 @@ export default function DashboardPage() {
       // Por ahora simulamos un depósito exitoso
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      setMessage({type: 'success', text: `Depósito de $${parseFloat(depositAmount).toLocaleString()} procesado exitosamente`});
+      setMessage({type: 'success', text: `Solicitud de depósito de $${parseFloat(depositAmount).toLocaleString()} enviada correctamente`});
       setShowDepositModal(false);
       setDepositAmount('');
       
@@ -309,7 +309,7 @@ export default function DashboardPage() {
       // Por ahora simulamos un retiro exitoso
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      setMessage({type: 'success', text: `Retiro de $${parseFloat(withdrawalAmount).toLocaleString()} procesado exitosamente`});
+      setMessage({type: 'success', text: `Solicitud de retiro de $${parseFloat(withdrawalAmount).toLocaleString()} enviada correctamente`});
       setShowWithdrawalModal(false);
       setWithdrawalAmount('');
       

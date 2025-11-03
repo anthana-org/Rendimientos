@@ -40,6 +40,18 @@ VITE_FIREBASE_APP_ID=tu_app_id
 firebase deploy --only firestore:rules
 ```
 
+## 5b. Desplegar reglas de Storage
+
+```bash
+firebase deploy --only storage
+```
+
+O desplegar ambas a la vez:
+
+```bash
+firebase deploy --only firestore:rules,storage
+```
+
 ## 6. Configurar Authentication
 
 En Firebase Console:

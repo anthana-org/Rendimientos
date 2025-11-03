@@ -6,7 +6,8 @@ import { PerformanceChart } from './PerformanceChart';
 import { useAuth } from '../hooks/useAuth';
 import * as XLSX from 'xlsx';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, storage } from '../firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import jsPDF from 'jspdf';
 
 interface User {
@@ -18,6 +19,7 @@ interface User {
 
 interface Contract {
   id: string;
+  userId?: string;
   contractType: string;
   investmentAmount: number;
   monthlyReturn: number;
@@ -27,7 +29,7 @@ interface Contract {
   remainingDays?: number;
   pdfUrl?: string;
   pdfFileName?: string;
-  pdfData?: string; // Base64 data
+  pdfData?: string; // Base64 data (deprecated - use pdfUrl from Storage instead)
   pdfMimeType?: string;
 }
 
@@ -106,6 +108,74 @@ export default function AdminPanel() {
     }
   };
 
+  // Helper function to upload PDF to Firebase Storage
+  const uploadPdfToStorage = async (file: File, userId: string, contractId?: string): Promise<string> => {
+    console.log('Iniciando subida de PDF a Storage...', { fileName: file.name, size: file.size, userId, contractId });
+    
+    if (!storage) {
+      console.error('Firebase Storage no está inicializado');
+      throw new Error('Firebase Storage no está configurado. Verifica las variables de entorno.');
+    }
+
+    try {
+      const fileName = contractId 
+        ? `contracts/${userId}/${contractId}_${file.name}`
+        : `contracts/${userId}/${Date.now()}_${file.name}`;
+      
+      console.log('Ruta del archivo en Storage:', fileName);
+      
+      const storageRef = ref(storage, fileName);
+      
+      // Subir archivo con timeout para evitar que se quede colgado (60 segundos)
+      console.log('Subiendo bytes a Storage...', `Tamaño: ${(file.size / 1024).toFixed(2)} KB`);
+      const uploadTask = uploadBytes(storageRef, file);
+      
+      // Crear timeout controlado
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error('La subida del archivo tomó demasiado tiempo (timeout de 60 segundos). Verifica tu conexión a internet.'));
+        }, 60000); // 60 segundos para archivos más grandes
+      });
+      
+      try {
+        await Promise.race([uploadTask, timeoutPromise]);
+        if (timeoutId) clearTimeout(timeoutId);
+        console.log('Archivo subido exitosamente a Storage');
+      } catch (error) {
+        if (timeoutId) clearTimeout(timeoutId);
+        throw error;
+      }
+      
+      // Obtener URL de descarga
+      console.log('Obteniendo URL de descarga...');
+      const downloadURL = await getDownloadURL(storageRef);
+      console.log('URL de descarga obtenida:', downloadURL);
+      
+      return downloadURL;
+    } catch (error: any) {
+      console.error('Error detallado en uploadPdfToStorage:', {
+        message: error.message,
+        code: error.code,
+        name: error.name,
+        stack: error.stack
+      });
+      
+      // Mensajes de error más descriptivos
+      if (error.code === 'storage/unauthorized') {
+        throw new Error('No tienes permisos para subir archivos. Verifica las reglas de Firebase Storage.');
+      } else if (error.code === 'storage/canceled') {
+        throw new Error('La subida fue cancelada.');
+      } else if (error.code === 'storage/unknown') {
+        throw new Error('Error desconocido al subir el archivo. Verifica tu conexión a internet.');
+      } else if (error.message?.includes('timeout')) {
+        throw new Error('La subida tardó demasiado. Intenta con un archivo más pequeño o verifica tu conexión.');
+      } else {
+        throw new Error(`Error al subir PDF: ${error.message || 'Error desconocido'}`);
+      }
+    }
+  };
+
   const filteredUsers = users.filter(user =>
         user.email.toLowerCase().includes(searchTerm.toLowerCase())
       );
@@ -151,25 +221,25 @@ export default function AdminPanel() {
       });
 
       if (result.success) {
-        setSuccess(result.requiresReauth 
-          ? `Usuario ${newUser.email} creado exitosamente. Necesitas volver a iniciar sesión.`
-          : `Usuario ${newUser.email} creado exitosamente.`);
-        setNewUser({ email: '', password: '' });
-        setShowCreateUser(false);
-        
-        // Limpiar mensaje de éxito después de 5 segundos
-        setTimeout(() => {
-          setSuccess(null);
-        }, 5000);
-        
-        // Recargar usuarios
-        loadUsers();
-        
-        // Si requiere reautenticación, mostrar mensaje adicional
         if (result.requiresReauth) {
+          // Si requiere reautenticación, mostrar alerta y redirigir
+          alert(`✅ Usuario ${newUser.email} creado exitosamente.\n\n⚠️ IMPORTANTE: Tu sesión fue cerrada por seguridad.\n\nPor favor, vuelve a iniciar sesión como administrador.`);
+          // Redirigir al login
           setTimeout(() => {
-            alert('Por favor, vuelve a iniciar sesión como administrador.');
-          }, 1000);
+            window.location.href = '/login';
+          }, 500);
+        } else {
+          setSuccess(`Usuario ${newUser.email} creado exitosamente.`);
+          setNewUser({ email: '', password: '' });
+          setShowCreateUser(false);
+          
+          // Limpiar mensaje de éxito después de 5 segundos
+          setTimeout(() => {
+            setSuccess(null);
+          }, 5000);
+          
+          // Recargar usuarios
+          loadUsers();
         }
       } else {
         setError(result.error || 'Error creando usuario');
@@ -192,7 +262,7 @@ export default function AdminPanel() {
   const handleCreateContract = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setUploadingPdf(true);
+    setUploadingPdf(!!contractPdfFile); // Solo activar si hay PDF
     setError(null);
     setSuccess(null);
 
@@ -200,37 +270,36 @@ export default function AdminPanel() {
       let successCount = 0;
       let errorCount = 0;
       const errors: string[] = [];
-      let pdfUrl: string | undefined = undefined;
 
-      // Upload PDF if provided
-      if (contractPdfFile) {
+      // Si hay PDF, subirlo una sola vez y reutilizar la URL para todos los usuarios
+      let sharedPdfUrl: string | undefined = undefined;
+      
+      if (contractPdfFile && selectedUsers.length > 0) {
         try {
-          console.log('Subiendo PDF:', contractPdfFile.name);
-          
-          // Convertir PDF a base64
-          const reader = new FileReader();
-          const base64Promise = new Promise<string>((resolve, reject) => {
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = () => reject(new Error('Error leyendo archivo'));
-            reader.readAsDataURL(contractPdfFile);
-          });
-          
-          pdfUrl = await base64Promise;
-          console.log('PDF convertido a base64 exitosamente');
+          const firstUser = users.find(u => selectedUsers.includes(u.uid));
+          if (firstUser) {
+            console.log(`Subiendo PDF compartido a Storage:`, contractPdfFile.name);
+            setSuccess(`Subiendo PDF...`);
+            sharedPdfUrl = await uploadPdfToStorage(contractPdfFile, firstUser.uid);
+            console.log(`PDF compartido subido exitosamente:`, sharedPdfUrl);
+            setSuccess(`PDF subido. Creando contratos...`);
+          }
         } catch (uploadError: any) {
-          console.error('Error subiendo PDF:', uploadError);
-          setError(`Error subiendo PDF: ${uploadError.message}`);
+          console.error(`Error subiendo PDF compartido:`, uploadError);
+          const errorMsg = uploadError.message || 'Error desconocido al subir PDF';
+          setError(`Error subiendo PDF: ${errorMsg}`);
           setIsLoading(false);
           setUploadingPdf(false);
-          return;
+          return; // Salir si falla la subida del PDF
         }
-      } else {
-        console.log('No hay archivo PDF para subir');
       }
 
       for (const userId of selectedUsers) {
         const user = users.find(u => u.uid === userId);
         if (!user) continue;
+
+        setUploadingPdf(false); // Ya terminó la subida del PDF
+        setIsLoading(true); // Pero aún estamos creando contratos
 
         const startDate = new Date(newContract.startDate);
         const endDate = new Date(startDate);
@@ -245,10 +314,10 @@ export default function AdminPanel() {
           startDate: startDate.toISOString().split('T')[0],
           expirationDate: endDate.toISOString().split('T')[0],
           status: newContract.status as "active" | "inactive" | "expired",
-          pdfUrl: pdfUrl,
+          pdfUrl: sharedPdfUrl,
           pdfFileName: contractPdfFile?.name || undefined,
-          pdfData: pdfUrl, // Base64 data
           pdfMimeType: contractPdfFile?.type || undefined
+          // Removed pdfData to avoid exceeding Firestore document size limit
         };
 
         console.log('Creando contrato con datos:', contractData);
@@ -567,30 +636,6 @@ export default function AdminPanel() {
     }
   };
 
-  // Función de debug temporal para verificar datos en Firestore
-  const debugFirestoreData = async () => {
-    try {
-      console.log('=== DEBUG FIRESTORE DATA ===');
-      const result = await ContractService.getAllContracts();
-      if (result.success && result.data) {
-        console.log(`Total contratos en Firestore: ${result.data.length}`);
-        result.data.forEach((contract, index) => {
-          console.log(`\nContrato ${index + 1} (${contract.id}):`);
-          console.log(`- Tipo: ${contract.contractType}`);
-          console.log(`- Usuario: ${contract.userEmail}`);
-          console.log(`- PDF FileName: ${contract.pdfFileName || 'null'}`);
-          console.log(`- PDF Data Length: ${contract.pdfData?.length || 0}`);
-          console.log(`- PDF MimeType: ${contract.pdfMimeType || 'null'}`);
-          console.log(`- PDF URL: ${contract.pdfUrl || 'null'}`);
-        });
-      }
-    } catch (error) {
-      console.error('Error en debug:', error);
-    }
-  };
-
-
-
   const handleDocumentFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -602,10 +647,10 @@ export default function AdminPanel() {
         return;
       }
 
-      // Validar tamaño (máximo 750KB para evitar problemas con Firestore)
-      const maxSize = 750 * 1024; // 750KB
+      // Validar tamaño (máximo 10MB para Firebase Storage)
+      const maxSize = 10 * 1024 * 1024; // 10MB
       if (file.size > maxSize) {
-        setError(`El archivo es demasiado grande (${(file.size / 1024 / 1024).toFixed(1)}MB). El máximo permitido es 750KB debido a las limitaciones de almacenamiento.`);
+        setError(`El archivo es demasiado grande (${(file.size / 1024 / 1024).toFixed(1)}MB). El máximo permitido es 10MB.`);
         return;
       }
 
@@ -641,106 +686,75 @@ export default function AdminPanel() {
         type: documentFile.type
       });
       
-      // Método alternativo: convertir archivo a base64 y guardar en Firestore
-      const reader = new FileReader();
+      // Upload PDF to Firebase Storage instead of storing as base64
+      let pdfUrl: string;
+      try {
+        const userId = selectedContract.userId || selectedUserData?.uid || '';
+        if (!userId) {
+          throw new Error('No se pudo identificar el usuario del contrato');
+        }
+        pdfUrl = await uploadPdfToStorage(documentFile, userId, selectedContract.id);
+        console.log('Documento subido a Storage exitosamente:', pdfUrl);
+      } catch (uploadError: any) {
+        console.error('Error subiendo PDF a Storage:', uploadError);
+        setError('Error subiendo el documento: ' + uploadError.message);
+        setUploadingDocument(false);
+        return;
+      }
       
-      // Promesa para manejar el FileReader de forma más robusta
-      await new Promise<void>((resolve, reject) => {
-        reader.onload = async (e) => {
-          try {
-            const base64Data = e.target?.result as string;
-            
-            if (!base64Data) {
-              throw new Error('No se pudo leer el archivo como base64');
-            }
-
-            console.log('Archivo convertido a base64, tamaño:', base64Data.length);
-            
-            // Validar que el base64 no sea demasiado grande (Firestore tiene límites de 1MB por campo)
-            // Un archivo de 750KB se convierte en aproximadamente 1MB en base64
-            if (base64Data.length > 1000000) { // ~1MB en base64
-              throw new Error('El archivo es demasiado grande después de la conversión. El tamaño máximo permitido es 750KB.');
-            }
-            
-            // Guardar el PDF como base64 en Firestore
-            const contractRef = doc(db, 'contracts', selectedContract.id);
-            await updateDoc(contractRef, {
-              pdfData: base64Data,
-              pdfFileName: documentName || documentFile.name,
-              pdfMimeType: documentFile.type,
-              updatedAt: serverTimestamp()
-            });
-            
-            console.log('Documento guardado como base64 en Firestore');
-            
-            // Actualizar el estado local del contrato seleccionado
-            setSelectedContract({
-              ...selectedContract,
-              pdfUrl: base64Data, // Usar base64 como URL temporal
-              pdfFileName: documentName || documentFile.name,
-              pdfData: base64Data,
-              pdfMimeType: documentFile.type
-            });
-            
-            // Recargar los contratos del usuario para mostrar los cambios
-            if (selectedUserData) {
-              console.log('Recargando contratos para usuario:', selectedUserData.uid);
-              const contractsResult = await ContractService.getContractsByUser(selectedUserData.uid);
-              if (contractsResult.success && contractsResult.data) {
-                setSelectedUserContracts(contractsResult.data);
-                console.log('Contratos recargados con PDF actualizado:', contractsResult.data.length);
-                
-                // Buscar el contrato actualizado
-                const updatedContract = contractsResult.data.find(c => c.id === selectedContract.id);
-                if (updatedContract) {
-                  console.log('Contrato actualizado encontrado:', {
-                    id: updatedContract.id,
-                    pdfFileName: updatedContract.pdfFileName,
-                    hasPdfData: !!updatedContract.pdfData,
-                    pdfDataLength: updatedContract.pdfData?.length || 0,
-                    pdfUrl: updatedContract.pdfUrl,
-                    pdfMimeType: updatedContract.pdfMimeType
-                  });
-                  
-                  // Actualizar también el contrato seleccionado con los datos frescos de la base de datos
-                  setSelectedContract(updatedContract);
-                } else {
-                  console.error('No se encontró el contrato actualizado en la lista recargada');
-                }
-              }
-            }
-            
-            setSuccess('Documento subido exitosamente');
-            setDocumentFile(null);
-            setDocumentName('');
-            
-            // Cerrar el modal después de un breve delay para que el usuario vea el mensaje de éxito
-            setTimeout(() => {
-              setShowDocumentUpload(false);
-            }, 1500);
-            
-            resolve();
-          } catch (error: any) {
-            console.error('Error guardando documento:', error);
-            const errorMessage = error.message || 'Error desconocido al guardar el documento';
-            setError('Error guardando el documento: ' + errorMessage);
-            reject(error);
-          } finally {
-            setUploadingDocument(false);
-          }
-        };
-        
-        reader.onerror = (error) => {
-          console.error('Error leyendo el archivo:', error);
-          const errorMessage = 'Error leyendo el archivo. Por favor intenta con otro archivo.';
-          setError(errorMessage);
-          setUploadingDocument(false);
-          reject(new Error(errorMessage));
-        };
-        
-        // Leer el archivo como base64
-        reader.readAsDataURL(documentFile);
+      // Update contract document in Firestore with Storage URL (remove pdfData)
+      const contractRef = doc(db, 'contracts', selectedContract.id);
+      await updateDoc(contractRef, {
+        pdfUrl: pdfUrl,
+        pdfFileName: documentName || documentFile.name,
+        pdfMimeType: documentFile.type,
+        updatedAt: serverTimestamp()
       });
+      
+      console.log('Documento guardado en Firestore con URL de Storage');
+      
+      // Update local state
+      setSelectedContract({
+        ...selectedContract,
+        pdfUrl: pdfUrl,
+        pdfFileName: documentName || documentFile.name,
+        pdfMimeType: documentFile.type
+      });
+      
+      // Reload user contracts to show changes
+      if (selectedUserData) {
+        console.log('Recargando contratos para usuario:', selectedUserData.uid);
+        const contractsResult = await ContractService.getContractsByUser(selectedUserData.uid);
+        if (contractsResult.success && contractsResult.data) {
+          setSelectedUserContracts(contractsResult.data);
+          console.log('Contratos recargados con PDF actualizado:', contractsResult.data.length);
+          
+          // Find updated contract
+          const updatedContract = contractsResult.data.find(c => c.id === selectedContract.id);
+          if (updatedContract) {
+            console.log('Contrato actualizado encontrado:', {
+              id: updatedContract.id,
+              pdfFileName: updatedContract.pdfFileName,
+              pdfUrl: updatedContract.pdfUrl,
+              pdfMimeType: updatedContract.pdfMimeType
+            });
+            
+            // Update selected contract with fresh data
+            setSelectedContract(updatedContract);
+          } else {
+            console.error('No se encontró el contrato actualizado en la lista recargada');
+          }
+        }
+      }
+      
+      setSuccess('Documento subido exitosamente');
+      setDocumentFile(null);
+      setDocumentName('');
+      
+      // Close modal after a brief delay to show success message
+      setTimeout(() => {
+        setShowDocumentUpload(false);
+      }, 1500);
       
     } catch (error: any) {
       console.error('Error subiendo documento:', error);
@@ -760,7 +774,7 @@ export default function AdminPanel() {
 
   const handleBulkUserUpload = async () => {
     if (!bulkUploadFile) {
-      setError('Selecciona un archivo Excel');
+      setError('Selecciona un archivo Excel o CSV');
       return;
     }
 
@@ -768,20 +782,93 @@ export default function AdminPanel() {
       setIsLoading(true);
       setBulkUploadProgress('Leyendo archivo...');
       
+      let jsonData: any[] = [];
+      
+      // Leer archivo (Excel o CSV) usando XLSX que maneja ambos formatos
       const data = await bulkUploadFile.arrayBuffer();
-      const workbook = XLSX.read(data);
+      
+      // Leer el archivo usando XLSX (maneja tanto Excel como CSV)
+      const workbook = XLSX.read(data, { 
+        type: 'array'
+      });
+      
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet);
+      jsonData = XLSX.utils.sheet_to_json(worksheet);
+      
+      if (!jsonData || jsonData.length === 0) {
+        setError('El archivo está vacío o no se pudo leer correctamente');
+        setIsLoading(false);
+        setBulkUploadProgress('');
+        return;
+      }
+      
+      console.log('Datos leídos:', jsonData.length, 'filas');
+      console.log('Primera fila de ejemplo:', jsonData[0]);
 
       setBulkUploadProgress(`Procesando ${jsonData.length} usuarios...`);
+      
+      // Guardar información del admin antes de crear usuarios (para logging)
+      const adminInfo = user ? {
+        email: user.email || '',
+        uid: user.uid
+      } : null;
+      
+      console.log('Admin actual:', adminInfo);
       
       let successCount = 0;
       let errorCount = 0;
       const errors: string[] = [];
+      let requiresReauth = false;
+
+      // Detectar nombres de columnas del archivo (primera fila)
+      const firstRow = jsonData[0] as any;
+      const columnNames = Object.keys(firstRow || {});
+      console.log('Columnas encontradas en el archivo:', columnNames);
+      
+      // Buscar columnas de email con múltiples variantes
+      const findColumn = (variants: string[]) => {
+        for (const variant of variants) {
+          // Buscar exacto
+          if (columnNames.includes(variant)) return variant;
+          // Buscar case-insensitive
+          const found = columnNames.find(col => col.toLowerCase() === variant.toLowerCase());
+          if (found) return found;
+        }
+        return null;
+      };
+      
+      const emailColumn = findColumn(['email', 'correo', 'mail', 'e-mail']);
+      const passwordColumn = findColumn(['password', 'contraseña', 'pass', 'pwd']);
+      const nameColumn = findColumn(['name', 'nombre', 'displayName', 'displayname']);
+      const phoneColumn = findColumn(['phone', 'telefono', 'phoneNumber', 'phonenumber', 'tel']);
+      
+      console.log('Columnas detectadas:', {
+        email: emailColumn,
+        password: passwordColumn,
+        name: nameColumn,
+        phone: phoneColumn
+      });
+      
+      if (!emailColumn) {
+        setError(`No se encontró columna de email. Columnas disponibles: ${columnNames.join(', ')}`);
+        setIsLoading(false);
+        setBulkUploadProgress('');
+        return;
+      }
+      
+      if (!passwordColumn) {
+        setError(`No se encontró columna de contraseña. Columnas disponibles: ${columnNames.join(', ')}`);
+        setIsLoading(false);
+        setBulkUploadProgress('');
+        return;
+      }
 
       for (let i = 0; i < jsonData.length; i++) {
         const row = jsonData[i] as any;
-        const email = row.email || row.Email || row.EMAIL;
+        const email = row[emailColumn]?.toString().trim();
+        const password = row[passwordColumn]?.toString().trim();
+        const displayName = nameColumn ? row[nameColumn]?.toString().trim() : email;
+        const phoneNumber = phoneColumn ? row[phoneColumn]?.toString().trim() : '';
         
         if (!email) {
           errorCount++;
@@ -789,23 +876,67 @@ export default function AdminPanel() {
           continue;
         }
 
+        if (!password) {
+          errorCount++;
+          errors.push(`Fila ${i + 1}: Contraseña requerida`);
+          continue;
+        }
+
         setBulkUploadProgress(`Creando usuario ${i + 1}/${jsonData.length}: ${email}`);
 
         try {
-          // Simular creación de usuario
-          console.log('Creando usuario:', email);
-          successCount++;
-    } catch (err: any) {
+          // Verificar si el usuario ya existe
+          const existingUser = await UserService.getUserByEmail(email);
+          if (existingUser.success && existingUser.data) {
+            console.log(`Usuario ${email} ya existe, omitiendo...`);
+            continue;
+          }
+
+          // Crear el usuario usando AdminAuthService
+          const result = await AdminAuthService.createUser({
+            email: email.trim(),
+            password: password.trim(),
+            displayName: displayName?.trim() || email.trim(),
+            phoneNumber: phoneNumber?.trim() || ''
+          });
+
+          if (result.success) {
+            successCount++;
+            console.log(`✅ Usuario creado: ${email}`);
+            
+            // Si requiere reautenticación, marcar la bandera
+            if (result.requiresReauth) {
+              requiresReauth = true;
+            }
+          } else {
+            errorCount++;
+            errors.push(`${email}: ${result.error || 'Error desconocido'}`);
+          }
+        } catch (err: any) {
           errorCount++;
-          errors.push(`${email}: ${err.message}`);
+          errors.push(`${email}: ${err.message || 'Error desconocido'}`);
         }
       }
 
       if (successCount > 0) {
-        setSuccess(`✅ ${successCount} usuarios creados exitosamente${errorCount > 0 ? `. ${errorCount} errores.` : ''}`);
-        setShowBulkUserUpload(false);
-        setBulkUploadFile(null);
-        loadUsers();
+        const message = `✅ ${successCount} usuarios creados exitosamente${errorCount > 0 ? `. ${errorCount} errores.` : ''}`;
+        
+        if (requiresReauth) {
+          // Mostrar alerta antes de redirigir
+          alert(`${message}\n\n⚠️ IMPORTANTE: Tu sesión fue cerrada por seguridad.\n\nPor favor, vuelve a iniciar sesión como administrador.`);
+          // Esperar un momento y luego redirigir al login
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 500);
+        } else {
+          setSuccess(message);
+          setShowBulkUserUpload(false);
+          setBulkUploadFile(null);
+          // Esperar un momento para que Firebase sincronice antes de recargar
+          setTimeout(() => {
+            loadUsers();
+          }, 1000);
+        }
       }
       
       if (errorCount > 0 && successCount === 0) {
@@ -840,12 +971,6 @@ export default function AdminPanel() {
               className="px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:shadow-lg hover:scale-105 transition-all duration-300 font-semibold"
             >
               Crear Usuario
-          </button>
-          <button
-              onClick={debugFirestoreData}
-              className="px-6 py-3 bg-gradient-to-r from-yellow-600 to-yellow-700 text-white rounded-xl hover:shadow-lg hover:scale-105 transition-all duration-300 font-semibold"
-            >
-              Debug Firestore
           </button>
       </div>
       </div>
@@ -1328,20 +1453,51 @@ export default function AdminPanel() {
 
             <div className="p-6 space-y-6 max-h-[calc(90vh-120px)] overflow-y-auto">
               {/* Resumen General */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-gradient-to-br from-green-900/30 to-green-800/30 rounded-xl p-4 border border-green-500/30">
-                  <p className="text-green-400 text-sm font-medium mb-1">Total Invertido</p>
-                  <p className="text-white text-2xl font-bold">
-                    ${selectedUserContracts.reduce((sum, c) => sum + (c.investmentAmount || 0), 0).toLocaleString()}
-                  </p>
-                              </div>
-                <div className="bg-gradient-to-br from-blue-900/30 to-blue-800/30 rounded-xl p-4 border border-blue-500/30">
-                  <p className="text-blue-400 text-sm font-medium mb-1">Contratos Activos</p>
-                  <p className="text-white text-2xl font-bold">
-                    {selectedUserContracts.filter(c => c.status === 'active').length}
-                  </p>
-                                </div>
-                              </div>
+              {(() => {
+                const now = new Date();
+                const completedContracts = selectedUserContracts.filter(c => {
+                  const expirationDate = new Date(c.expirationDate);
+                  const daysRemaining = Math.ceil((expirationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                  return c.status === 'expired' || daysRemaining < 0;
+                });
+                
+                const totalEarnings = completedContracts.reduce((sum, contract) => {
+                  const startDate = new Date(contract.startDate);
+                  const expirationDate = new Date(contract.expirationDate);
+                  const contractDurationMonths = Math.max(1, Math.ceil(
+                    (expirationDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30)
+                  ));
+                  const investmentAmount = contract.investmentAmount || 0;
+                  const monthlyReturnPct = contract.monthlyReturn || 0;
+                  return sum + (investmentAmount * (monthlyReturnPct / 100) * contractDurationMonths);
+                }, 0);
+                
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-gradient-to-br from-green-900/30 to-green-800/30 rounded-xl p-4 border border-green-500/30">
+                      <p className="text-green-400 text-sm font-medium mb-1">Total Invertido</p>
+                      <p className="text-white text-2xl font-bold">
+                        ${selectedUserContracts.reduce((sum, c) => sum + (c.investmentAmount || 0), 0).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="bg-gradient-to-br from-blue-900/30 to-blue-800/30 rounded-xl p-4 border border-blue-500/30">
+                      <p className="text-blue-400 text-sm font-medium mb-1">Contratos Activos</p>
+                      <p className="text-white text-2xl font-bold">
+                        {selectedUserContracts.filter(c => c.status === 'active').length}
+                      </p>
+                    </div>
+                    <div className="bg-gradient-to-br from-purple-900/30 to-purple-800/30 rounded-xl p-4 border border-purple-500/30">
+                      <p className="text-purple-400 text-sm font-medium mb-1">Ganancias Totales</p>
+                      <p className="text-white text-2xl font-bold">
+                        ${totalEarnings.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                      <p className="text-purple-300 text-xs mt-1">
+                        {completedContracts.length} contrato{completedContracts.length !== 1 ? 's' : ''} finalizado{completedContracts.length !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
               
               {/* Gráfica de Rendimientos */}
               <div className="mb-6">
@@ -1406,15 +1562,34 @@ export default function AdminPanel() {
                           <th className="text-left py-3 px-4 text-gray-400 font-medium">Vencimiento</th>
                           <th className="text-left py-3 px-4 text-gray-400 font-medium">Días Restantes</th>
                           <th className="text-left py-3 px-4 text-gray-400 font-medium">Estado</th>
+                          <th className="text-left py-3 px-4 text-gray-400 font-medium">Ganancia</th>
                       </tr>
                     </thead>
                       <tbody>
                         {selectedUserContracts.map((contract) => {
                           // Calcular días restantes
                           const now = new Date();
+                          const startDate = new Date(contract.startDate);
                           const expirationDate = new Date(contract.expirationDate);
                           const timeDiff = expirationDate.getTime() - now.getTime();
                           const daysRemaining = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+                          
+                          // Determinar si el contrato está finalizado
+                          const isCompleted = contract.status === 'expired' || daysRemaining < 0;
+                          
+                          // Calcular ganancia para contratos finalizados
+                          let earnings = null;
+                          if (isCompleted) {
+                            // Calcular duración del contrato en meses
+                            const contractDurationMonths = Math.max(1, Math.ceil(
+                              (expirationDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30)
+                            ));
+                            
+                            // Ganancia total = monto invertido * (rendimiento mensual / 100) * meses
+                            const investmentAmount = contract.investmentAmount || 0;
+                            const monthlyReturnPct = contract.monthlyReturn || 0;
+                            earnings = investmentAmount * (monthlyReturnPct / 100) * contractDurationMonths;
+                          }
                           
                           return (
                             <tr 
@@ -1459,6 +1634,15 @@ export default function AdminPanel() {
                                   {contract.status === 'active' ? 'Activo' : 
                                    contract.status === 'inactive' ? 'Inactivo' : 'Vencido'}
                             </span>
+                          </td>
+                              <td className="py-3 px-4">
+                                {isCompleted && earnings !== null ? (
+                                  <span className="text-green-400 font-bold">
+                                    +${earnings.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-500 text-sm">-</span>
+                                )}
                           </td>
                         </tr>
                           );
@@ -1617,10 +1801,16 @@ export default function AdminPanel() {
                           onClick={() => {
                             const pdfUrl = selectedContract.pdfUrl || selectedContract.pdfData;
                             if (pdfUrl) {
-                              const link = document.createElement('a');
-                              link.href = pdfUrl;
-                              link.download = selectedContract.pdfFileName || 'contrato.pdf';
-                              link.click();
+                              // If it's a base64 data URL, download directly
+                              if (pdfUrl.startsWith('data:')) {
+                                const link = document.createElement('a');
+                                link.href = pdfUrl;
+                                link.download = selectedContract.pdfFileName || 'contrato.pdf';
+                                link.click();
+                              } else {
+                                // For Storage URLs, open in new tab (download attribute doesn't work cross-origin)
+                                window.open(pdfUrl, '_blank');
+                              }
                             }
                           }}
                           className="px-3 py-1 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm flex items-center gap-1"
@@ -1628,7 +1818,7 @@ export default function AdminPanel() {
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                           </svg>
-                          Descargar
+                          {selectedContract.pdfUrl && !selectedContract.pdfUrl.startsWith('data:') ? 'Ver PDF' : 'Descargar'}
                         </button>
                       </div>
                     </div>
@@ -1748,7 +1938,7 @@ export default function AdminPanel() {
                       <span className="text-gray-400">
                         {documentFile ? documentFile.name : 'Haz clic para seleccionar un PDF'}
                       </span>
-                      <span className="text-gray-500 text-sm">Máximo 750KB</span>
+                      <span className="text-gray-500 text-sm">Máximo 10MB</span>
                     </label>
               </div>
                   {documentFile && (
