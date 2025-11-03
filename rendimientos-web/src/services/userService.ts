@@ -5,6 +5,7 @@ export interface UserData {
   email: string;
   displayName?: string;
   phoneNumber?: string;
+  address?: string;
   createdAt?: any;
   updatedAt?: any;
 }

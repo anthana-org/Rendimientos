@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserService } from '../services/userService';
 import { ContractService } from '../services/contractService';
+import { AdminAuthService } from '../services/adminAuthService';
 import { PerformanceChart } from './PerformanceChart';
 import { useAuth } from '../hooks/useAuth';
 import * as XLSX from 'xlsx';
@@ -132,13 +133,48 @@ export default function AdminPanel() {
     setError(null);
     setSuccess(null);
 
+    if (!newUser.email || !newUser.password) {
+      setError('Email y contraseña son requeridos');
+      setIsLoading(false);
+      return;
+    }
+
+    if (newUser.password.length < 6) {
+      setError('La contraseña debe tener al menos 6 caracteres');
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      // Simular creación de usuario
-      console.log('Creando usuario:', newUser.email);
-      setSuccess('Usuario creado exitosamente');
-      setNewUser({ email: '', password: '' });
-      setShowCreateUser(false);
-      loadUsers();
+      const result = await AdminAuthService.createUser({
+        email: newUser.email,
+        password: newUser.password,
+      });
+
+      if (result.success) {
+        setSuccess(result.requiresReauth 
+          ? `Usuario ${newUser.email} creado exitosamente. Necesitas volver a iniciar sesión.`
+          : `Usuario ${newUser.email} creado exitosamente.`);
+        setNewUser({ email: '', password: '' });
+        setShowCreateUser(false);
+        
+        // Limpiar mensaje de éxito después de 5 segundos
+        setTimeout(() => {
+          setSuccess(null);
+        }, 5000);
+        
+        // Recargar usuarios
+        loadUsers();
+        
+        // Si requiere reautenticación, mostrar mensaje adicional
+        if (result.requiresReauth) {
+          setTimeout(() => {
+            alert('Por favor, vuelve a iniciar sesión como administrador.');
+          }, 1000);
+        }
+      } else {
+        setError(result.error || 'Error creando usuario');
+      }
     } catch (err: any) {
       setError(err.message || 'Error creando usuario');
     } finally {
@@ -435,6 +471,40 @@ export default function AdminPanel() {
     }
   };
 
+  const handleUpdateContractStatus = async (contractId: string, newStatus: 'active' | 'inactive' | 'expired') => {
+    setIsLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const result = await ContractService.updateContractStatus(contractId, newStatus);
+      
+      if (result.success) {
+        const statusLabel = newStatus === 'active' ? 'Activo' : newStatus === 'inactive' ? 'Inactivo' : 'Vencido';
+        setSuccess(`✅ Estado del contrato actualizado a "${statusLabel}"`);
+        
+        // Actualizar el contrato seleccionado si es el mismo
+        if (selectedContract && selectedContract.id === contractId) {
+          setSelectedContract({ ...selectedContract, status: newStatus });
+        }
+        
+        // Recargar los contratos del usuario si estamos viendo contratos de un usuario específico
+        if (selectedUserData) {
+          const contractsResult = await ContractService.getContractsByUser(selectedUserData.uid);
+          if (contractsResult.success && contractsResult.data) {
+            setSelectedUserContracts(contractsResult.data);
+          }
+        }
+      } else {
+        setError(`Error actualizando estado del contrato: ${result.error}`);
+      }
+    } catch (err: any) {
+      setError(`Error: ${err.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleDeleteContract = async () => {
     if (!selectedContract) return;
 
@@ -525,15 +595,18 @@ export default function AdminPanel() {
   const handleDocumentFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setError(null); // Limpiar errores previos
+      
       // Validar que sea PDF
       if (file.type !== 'application/pdf') {
         setError('Solo se permiten archivos PDF');
         return;
       }
 
-      // Validar tamaño (máximo 10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        setError('El archivo no puede ser mayor a 10MB');
+      // Validar tamaño (máximo 750KB para evitar problemas con Firestore)
+      const maxSize = 750 * 1024; // 750KB
+      if (file.size > maxSize) {
+        setError(`El archivo es demasiado grande (${(file.size / 1024 / 1024).toFixed(1)}MB). El máximo permitido es 750KB debido a las limitaciones de almacenamiento.`);
         return;
       }
 
@@ -551,6 +624,11 @@ export default function AdminPanel() {
       return;
     }
 
+    if (!documentName.trim()) {
+      setError('Ingresa un nombre para el documento');
+      return;
+    }
+
     setUploadingDocument(true);
     setError(null);
     setSuccess(null);
@@ -558,86 +636,117 @@ export default function AdminPanel() {
     try {
       console.log('Subiendo documento al contrato:', selectedContract.id);
       console.log('Usuario autenticado:', user?.email);
+      console.log('Archivo:', {
+        name: documentFile.name,
+        size: documentFile.size,
+        type: documentFile.type
+      });
       
       // Método alternativo: convertir archivo a base64 y guardar en Firestore
       const reader = new FileReader();
       
-      reader.onload = async (e) => {
-        try {
-          const base64Data = e.target?.result as string;
-          
-          // Guardar el PDF como base64 en Firestore
-          const contractRef = doc(db, 'contracts', selectedContract.id);
-          await updateDoc(contractRef, {
-            pdfData: base64Data,
-            pdfFileName: documentFile.name,
-            pdfMimeType: documentFile.type,
-            updatedAt: serverTimestamp()
-          });
-          
-          console.log('Documento guardado como base64 en Firestore');
-          
-          // Actualizar el estado local del contrato seleccionado
-          setSelectedContract({
-            ...selectedContract,
-            pdfUrl: base64Data, // Usar base64 como URL temporal
-            pdfFileName: documentFile.name,
-            pdfData: base64Data,
-            pdfMimeType: documentFile.type
-          });
-          
-          // Recargar los contratos del usuario para mostrar los cambios
-          if (selectedUserData) {
-            console.log('Recargando contratos para usuario:', selectedUserData.uid);
-            const contractsResult = await ContractService.getContractsByUser(selectedUserData.uid);
-            if (contractsResult.success && contractsResult.data) {
-              setSelectedUserContracts(contractsResult.data);
-              console.log('Contratos recargados con PDF actualizado:', contractsResult.data.length);
-              
-              // Buscar el contrato actualizado
-              const updatedContract = contractsResult.data.find(c => c.id === selectedContract.id);
-              if (updatedContract) {
-                console.log('Contrato actualizado encontrado:', {
-                  id: updatedContract.id,
-                  pdfFileName: updatedContract.pdfFileName,
-                  hasPdfData: !!updatedContract.pdfData,
-                  pdfDataLength: updatedContract.pdfData?.length || 0,
-                  pdfUrl: updatedContract.pdfUrl,
-                  pdfMimeType: updatedContract.pdfMimeType
-                });
+      // Promesa para manejar el FileReader de forma más robusta
+      await new Promise<void>((resolve, reject) => {
+        reader.onload = async (e) => {
+          try {
+            const base64Data = e.target?.result as string;
+            
+            if (!base64Data) {
+              throw new Error('No se pudo leer el archivo como base64');
+            }
+
+            console.log('Archivo convertido a base64, tamaño:', base64Data.length);
+            
+            // Validar que el base64 no sea demasiado grande (Firestore tiene límites de 1MB por campo)
+            // Un archivo de 750KB se convierte en aproximadamente 1MB en base64
+            if (base64Data.length > 1000000) { // ~1MB en base64
+              throw new Error('El archivo es demasiado grande después de la conversión. El tamaño máximo permitido es 750KB.');
+            }
+            
+            // Guardar el PDF como base64 en Firestore
+            const contractRef = doc(db, 'contracts', selectedContract.id);
+            await updateDoc(contractRef, {
+              pdfData: base64Data,
+              pdfFileName: documentName || documentFile.name,
+              pdfMimeType: documentFile.type,
+              updatedAt: serverTimestamp()
+            });
+            
+            console.log('Documento guardado como base64 en Firestore');
+            
+            // Actualizar el estado local del contrato seleccionado
+            setSelectedContract({
+              ...selectedContract,
+              pdfUrl: base64Data, // Usar base64 como URL temporal
+              pdfFileName: documentName || documentFile.name,
+              pdfData: base64Data,
+              pdfMimeType: documentFile.type
+            });
+            
+            // Recargar los contratos del usuario para mostrar los cambios
+            if (selectedUserData) {
+              console.log('Recargando contratos para usuario:', selectedUserData.uid);
+              const contractsResult = await ContractService.getContractsByUser(selectedUserData.uid);
+              if (contractsResult.success && contractsResult.data) {
+                setSelectedUserContracts(contractsResult.data);
+                console.log('Contratos recargados con PDF actualizado:', contractsResult.data.length);
                 
-                // Actualizar también el contrato seleccionado con los datos frescos de la base de datos
-                setSelectedContract(updatedContract);
-              } else {
-                console.error('No se encontró el contrato actualizado en la lista recargada');
+                // Buscar el contrato actualizado
+                const updatedContract = contractsResult.data.find(c => c.id === selectedContract.id);
+                if (updatedContract) {
+                  console.log('Contrato actualizado encontrado:', {
+                    id: updatedContract.id,
+                    pdfFileName: updatedContract.pdfFileName,
+                    hasPdfData: !!updatedContract.pdfData,
+                    pdfDataLength: updatedContract.pdfData?.length || 0,
+                    pdfUrl: updatedContract.pdfUrl,
+                    pdfMimeType: updatedContract.pdfMimeType
+                  });
+                  
+                  // Actualizar también el contrato seleccionado con los datos frescos de la base de datos
+                  setSelectedContract(updatedContract);
+                } else {
+                  console.error('No se encontró el contrato actualizado en la lista recargada');
+                }
               }
             }
+            
+            setSuccess('Documento subido exitosamente');
+            setDocumentFile(null);
+            setDocumentName('');
+            
+            // Cerrar el modal después de un breve delay para que el usuario vea el mensaje de éxito
+            setTimeout(() => {
+              setShowDocumentUpload(false);
+            }, 1500);
+            
+            resolve();
+          } catch (error: any) {
+            console.error('Error guardando documento:', error);
+            const errorMessage = error.message || 'Error desconocido al guardar el documento';
+            setError('Error guardando el documento: ' + errorMessage);
+            reject(error);
+          } finally {
+            setUploadingDocument(false);
           }
-          
-          setSuccess('Documento subido exitosamente');
-          setDocumentFile(null);
-          setDocumentName('');
-          setShowDocumentUpload(false);
-          
-        } catch (error: any) {
-          console.error('Error guardando documento:', error);
-          setError('Error guardando el documento: ' + error.message);
-        } finally {
+        };
+        
+        reader.onerror = (error) => {
+          console.error('Error leyendo el archivo:', error);
+          const errorMessage = 'Error leyendo el archivo. Por favor intenta con otro archivo.';
+          setError(errorMessage);
           setUploadingDocument(false);
-        }
-      };
-      
-      reader.onerror = () => {
-        setError('Error leyendo el archivo');
-        setUploadingDocument(false);
-      };
-      
-      // Leer el archivo como base64
-      reader.readAsDataURL(documentFile);
+          reject(new Error(errorMessage));
+        };
+        
+        // Leer el archivo como base64
+        reader.readAsDataURL(documentFile);
+      });
       
     } catch (error: any) {
       console.error('Error subiendo documento:', error);
-      setError('Error subiendo el documento: ' + error.message);
+      const errorMessage = error.message || 'Error desconocido al subir el documento';
+      setError('Error subiendo el documento: ' + errorMessage);
       setUploadingDocument(false);
     }
   };
@@ -879,7 +988,12 @@ export default function AdminPanel() {
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold text-white">Crear Usuario</h2>
                       <button
-                  onClick={() => setShowCreateUser(false)}
+                  onClick={() => {
+                    setShowCreateUser(false);
+                    setError(null);
+                    setSuccess(null);
+                    setNewUser({ email: '', password: '' });
+                  }}
                   className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
                       >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -887,6 +1001,18 @@ export default function AdminPanel() {
                   </svg>
                       </button>
                     </div>
+
+              {/* Mensajes de error y éxito */}
+              {error && (
+                <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg">
+                  <p className="text-red-400 text-sm">{error}</p>
+                </div>
+              )}
+              {success && (
+                <div className="mb-4 p-3 bg-green-500/20 border border-green-500/50 rounded-lg">
+                  <p className="text-green-400 text-sm">{success}</p>
+                </div>
+              )}
 
               <form onSubmit={handleCreateUser} className="space-y-4">
                 <div>
@@ -926,7 +1052,12 @@ export default function AdminPanel() {
                   
                                   <button
                     type="button"
-                    onClick={() => setShowCreateUser(false)}
+                    onClick={() => {
+                      setShowCreateUser(false);
+                      setError(null);
+                      setSuccess(null);
+                      setNewUser({ email: '', password: '' });
+                    }}
                     className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
                   >
                     Cancelar
@@ -1419,15 +1550,31 @@ export default function AdminPanel() {
                     <p className="text-white font-medium">{selectedContract.expirationDate}</p>
                   </div>
                   <div>
-                    <p className="text-gray-400 text-sm">Estado</p>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      selectedContract.status === 'active' ? 'bg-green-500/20 text-green-400' :
-                      selectedContract.status === 'inactive' ? 'bg-gray-500/20 text-gray-400' :
-                      'bg-red-500/20 text-red-400'
-                    }`}>
-                      {selectedContract.status === 'active' ? 'Activo' : 
-                       selectedContract.status === 'inactive' ? 'Inactivo' : 'Vencido'}
-                    </span>
+                    <p className="text-gray-400 text-sm mb-2">Estado</p>
+                    <select
+                      value={selectedContract.status || 'active'}
+                      onChange={(e) => {
+                        const newStatus = e.target.value as 'active' | 'inactive' | 'expired';
+                        handleUpdateContractStatus(selectedContract.id, newStatus);
+                      }}
+                      disabled={isLoading}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium border-none outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                        selectedContract.status === 'active' ? 'bg-green-500/20 text-green-400' :
+                        selectedContract.status === 'inactive' ? 'bg-gray-500/20 text-gray-400' :
+                        'bg-red-500/20 text-red-400'
+                      }`}
+                      style={{
+                        appearance: 'none',
+                        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23fff' d='M6 9L1 4h10z'/%3E%3C/svg%3E")`,
+                        backgroundRepeat: 'no-repeat',
+                        backgroundPosition: 'right 0.75rem center',
+                        paddingRight: '2.5rem'
+                      }}
+                    >
+                      <option value="active" className="bg-gray-800 text-green-400">Activo</option>
+                      <option value="inactive" className="bg-gray-800 text-gray-400">Inactivo</option>
+                      <option value="expired" className="bg-gray-800 text-red-400">Vencido</option>
+                    </select>
                   </div>
                   <div>
                     <p className="text-gray-400 text-sm">Días Restantes</p>
@@ -1525,6 +1672,7 @@ export default function AdminPanel() {
                     setDocumentFile(null);
                     setDocumentName('');
                     setError(null);
+                    setSuccess(null);
                   }}
                   className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
                 >
@@ -1535,6 +1683,28 @@ export default function AdminPanel() {
               </div>
 
               <div className="space-y-4">
+                {/* Mensajes de error y éxito */}
+                {error && (
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <p className="text-red-400 text-sm">{error}</p>
+                    </div>
+                  </div>
+                )}
+                {success && (
+                  <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <p className="text-green-400 text-sm">{success}</p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Información del contrato */}
                 <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4">
                   <h3 className="text-blue-400 font-medium mb-2">Contrato</h3>
@@ -1579,7 +1749,7 @@ export default function AdminPanel() {
                       <span className="text-gray-400">
                         {documentFile ? documentFile.name : 'Haz clic para seleccionar un PDF'}
                       </span>
-                      <span className="text-gray-500 text-sm">Máximo 10MB</span>
+                      <span className="text-gray-500 text-sm">Máximo 750KB</span>
                     </label>
               </div>
                   {documentFile && (
@@ -1632,6 +1802,7 @@ export default function AdminPanel() {
                       setDocumentFile(null);
                       setDocumentName('');
                       setError(null);
+                      setSuccess(null);
                     }}
                     disabled={uploadingDocument}
                     className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50"

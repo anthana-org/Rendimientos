@@ -37,14 +37,16 @@ export const PerformanceChart: React.FC<PerformanceChartProps> = ({
   const range = maxBalance - minBalance;
   const padding = range * 0.1; // 10% padding
   
-  const chartHeight = height - 80; // Espacio para etiquetas
+  const chartHeight = height - 100; // Espacio para etiquetas (aumentado para ejes)
   const chartWidth = 800;
-  const stepX = chartWidth / Math.max(data.length - 1, 1);
+  const paddingLeft = 70; // Espacio para etiquetas del eje Y
+  const paddingBottom = 40; // Espacio para etiquetas del eje X
+  const stepX = (chartWidth - paddingLeft) / Math.max(data.length - 1, 1);
   
   // Crear puntos para la línea de balance
   const points = data.map((point, index) => {
-    const x = index * stepX;
-    const y = chartHeight - ((point.balance - minBalance + padding) / (range + padding * 2)) * chartHeight;
+    const x = paddingLeft + index * stepX;
+    const y = chartHeight - paddingBottom - ((point.balance - minBalance + padding) / (range + padding * 2)) * chartHeight;
     return { x, y, ...point };
   });
 
@@ -56,9 +58,9 @@ export const PerformanceChart: React.FC<PerformanceChartProps> = ({
 
   // Crear área bajo la curva
   const areaData = [
-    `M 0 ${chartHeight}`,
+    `M ${paddingLeft} ${chartHeight - paddingBottom}`,
     ...points.map(point => `L ${point.x} ${point.y}`),
-    `L ${chartWidth} ${chartHeight}`,
+    `L ${points[points.length - 1].x} ${chartHeight - paddingBottom}`,
     'Z'
   ].join(' ');
 
@@ -94,26 +96,44 @@ export const PerformanceChart: React.FC<PerformanceChartProps> = ({
             </linearGradient>
           </defs>
           
-          {/* Grid lines */}
+          {/* Grid lines and Y-axis labels */}
           {[0, 0.25, 0.5, 0.75, 1].map((ratio, index) => {
-            const y = chartHeight * ratio;
-            const value = maxBalance - (ratio * (maxBalance - minBalance));
+            const y = chartHeight - paddingBottom - (chartHeight - paddingBottom) * ratio;
+            const value = minBalance + (ratio * (maxBalance - minBalance));
             return (
               <g key={index}>
                 <line 
-                  x1="0" y1={y} x2={chartWidth} y2={y} 
+                  x1={paddingLeft} y1={y} x2={chartWidth} y2={y} 
                   stroke="#374151" strokeWidth="1" strokeDasharray="2,2"
                 />
                 <text 
-                  x="-10" y={y + 4} 
+                  x={paddingLeft - 10} y={y + 4} 
                   textAnchor="end" 
-                  className="text-xs fill-gray-400"
+                  className="text-sm fill-gray-400 font-medium"
                 >
                   ${(value / 1000).toFixed(0)}k
                 </text>
               </g>
             );
           })}
+          
+          {/* Y-axis line */}
+          <line 
+            x1={paddingLeft} y1={chartHeight - paddingBottom} 
+            x2={paddingLeft} y2={0} 
+            stroke="#4b5563" strokeWidth="2"
+          />
+          
+          {/* Y-axis label */}
+          <text 
+            x={10} 
+            y={chartHeight / 2} 
+            transform="rotate(-90 10 center)" 
+            textAnchor="middle" 
+            className="text-sm fill-gray-300 font-semibold"
+          >
+            Patrimonio ($)
+          </text>
           
           {/* Area under curve */}
           <path 
@@ -132,48 +152,75 @@ export const PerformanceChart: React.FC<PerformanceChartProps> = ({
           />
           
           {/* Data points */}
-          {points.map((point, index) => (
-            <g key={index}>
-              {/* Point circle */}
-              <circle 
-                cx={point.x} 
-                cy={point.y} 
-                r="6" 
-                fill="#10b981" 
-                stroke="#ffffff" 
-                strokeWidth="2"
-                className="hover:r-8 transition-all duration-200 cursor-pointer"
-              />
-              
-              {/* Tooltip trigger area */}
-              <circle 
-                cx={point.x} 
-                cy={point.y} 
-                r="15" 
-                fill="transparent" 
-                className="cursor-pointer"
-              >
-                <title>
-                  {`${point.period}
+          {points.map((point, index) => {
+            // Mostrar etiquetas cada N puntos para evitar solapamiento
+            const showLabel = points.length <= 8 || index % Math.ceil(points.length / 8) === 0 || index === points.length - 1;
+            
+            return (
+              <g key={index}>
+                {/* Point circle */}
+                <circle 
+                  cx={point.x} 
+                  cy={point.y} 
+                  r="6" 
+                  fill="#10b981" 
+                  stroke="#ffffff" 
+                  strokeWidth="2"
+                  className="hover:r-8 transition-all duration-200 cursor-pointer"
+                />
+                
+                {/* Tooltip trigger area */}
+                <circle 
+                  cx={point.x} 
+                  cy={point.y} 
+                  r="15" 
+                  fill="transparent" 
+                  className="cursor-pointer"
+                >
+                  <title>
+                    {`${point.period}
 Contrato: $${point.capital?.toLocaleString()}
 Rendimiento: +$${point.rendimientoAmount?.toLocaleString()}
 Patrimonio Acumulado: $${point.balance?.toLocaleString()}
 Rendimiento Mensual: ${point.monthlyReturn || 0}%
 Meses Transcurridos: ${point.monthsElapsed || 0}`}
-                </title>
-              </circle>
-              
-              {/* Period labels */}
-              <text 
-                x={point.x} 
-                y={height - 10} 
-                textAnchor="middle" 
-                className="text-xs fill-gray-400"
-              >
-                {point.period}
-              </text>
-            </g>
-          ))}
+                  </title>
+                </circle>
+                
+                {/* Period labels - solo mostrar algunas para evitar solapamiento */}
+                {showLabel && (
+                  <g transform={`translate(${point.x},${height - paddingBottom + 25})`}>
+                    <text 
+                      x="0" 
+                      y="0" 
+                      textAnchor="middle" 
+                      className="text-xs fill-gray-400 font-medium"
+                      transform="rotate(-45 0 0)"
+                    >
+                      {point.period}
+                    </text>
+                  </g>
+                )}
+              </g>
+            );
+          })}
+          
+          {/* X-axis line */}
+          <line 
+            x1={paddingLeft} y1={chartHeight - paddingBottom} 
+            x2={chartWidth} y2={chartHeight - paddingBottom} 
+            stroke="#4b5563" strokeWidth="2"
+          />
+          
+          {/* X-axis label */}
+          <text 
+            x={paddingLeft + (chartWidth - paddingLeft) / 2} 
+            y={height - 5} 
+            textAnchor="middle" 
+            className="text-sm fill-gray-300 font-semibold"
+          >
+            Tiempo
+          </text>
         </svg>
       </div>
 

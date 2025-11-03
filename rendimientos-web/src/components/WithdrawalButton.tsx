@@ -1,45 +1,61 @@
 import { useState } from 'react';
+import { useAuth } from '../hooks/useAuth';
+import { EmailService } from '../services/emailService';
 
 interface WithdrawalButtonProps {
   onWithdrawalRequest?: () => void;
+  availableBalance?: number;
 }
 
-export function WithdrawalButton({ onWithdrawalRequest }: WithdrawalButtonProps) {
+const ADMIN_EMAIL = 'admin@test.com'; // Email del administrador
+
+export function WithdrawalButton({ onWithdrawalRequest, availableBalance = 0 }: WithdrawalButtonProps) {
+  const { user } = useAuth();
   const [showModal, setShowModal] = useState(false);
   const [withdrawalAmount, setWithdrawalAmount] = useState('');
-  const [withdrawalReason, setWithdrawalReason] = useState('');
+  const [withdrawalMethod, setWithdrawalMethod] = useState('transferencia');
   const [loading, setLoading] = useState(false);
 
   const handleWithdrawalRequest = async () => {
-    if (!withdrawalAmount || !withdrawalReason) {
-      alert('Por favor completa todos los campos');
+    if (!withdrawalAmount) {
+      alert('Por favor ingresa el monto a retirar');
+      return;
+    }
+
+    const amount = parseFloat(withdrawalAmount);
+    if (isNaN(amount) || amount <= 0) {
+      alert('Por favor ingresa un monto válido');
+      return;
+    }
+
+    if (availableBalance > 0 && amount > availableBalance) {
+      alert('El monto a retirar no puede ser mayor al balance disponible');
       return;
     }
 
     setLoading(true);
     
     try {
-      // Aquí se implementaría la lógica para procesar la solicitud de retiro
-      console.log('Solicitud de retiro:', {
-        amount: withdrawalAmount,
-        reason: withdrawalReason,
+      // Enviar notificación al administrador
+      EmailService.notifyAdmin(ADMIN_EMAIL, {
+        userEmail: user?.email || 'Usuario no identificado',
+        userName: user?.displayName || undefined,
+        amount: amount,
+        method: withdrawalMethod,
+        type: 'withdrawal',
         timestamp: new Date().toISOString()
       });
       
-      // Simular procesamiento
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      alert('Solicitud de retiro enviada exitosamente. Te contactaremos pronto.');
+      alert('Solicitud de retiro enviada. El administrador será notificado y te contactará pronto.');
       setShowModal(false);
       setWithdrawalAmount('');
-      setWithdrawalReason('');
       
       if (onWithdrawalRequest) {
         onWithdrawalRequest();
       }
     } catch (error) {
-      console.error('Error procesando solicitud de retiro:', error);
-      alert('Error al procesar la solicitud. Inténtalo de nuevo.');
+      console.error('Error enviando solicitud de retiro:', error);
+      alert('Error al enviar la solicitud. Inténtalo de nuevo.');
     } finally {
       setLoading(false);
     }
@@ -63,7 +79,7 @@ export function WithdrawalButton({ onWithdrawalRequest }: WithdrawalButtonProps)
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-semibold text-gray-900">Solicitar Retiro</h3>
+              <h3 className="text-xl font-semibold text-gray-900">Realizar Retiro</h3>
               <button
                 onClick={() => setShowModal(false)}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -75,70 +91,68 @@ export function WithdrawalButton({ onWithdrawalRequest }: WithdrawalButtonProps)
             </div>
 
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Monto a retirar (MXN)
-                </label>
-                <input
-                  type="number"
-                  value={withdrawalAmount}
-                  onChange={(e) => setWithdrawalAmount(e.target.value)}
-                  placeholder="Ingresa el monto"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                  min="1"
-                  step="0.01"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Motivo del retiro
-                </label>
-                <select
-                  value={withdrawalReason}
-                  onChange={(e) => setWithdrawalReason(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                >
-                  <option value="">Selecciona un motivo</option>
-                  <option value="emergency">Emergencia médica</option>
-                  <option value="personal">Necesidad personal</option>
-                  <option value="investment">Reinversión en otro proyecto</option>
-                  <option value="other">Otro</option>
-                </select>
-              </div>
-
-              {withdrawalReason === 'other' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Especifica el motivo
-                  </label>
-                  <textarea
-                    value={withdrawalReason}
-                    onChange={(e) => setWithdrawalReason(e.target.value)}
-                    placeholder="Describe el motivo específico"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                    rows={3}
-                  />
+              {/* Balance Disponible */}
+              {availableBalance > 0 && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-green-800">Balance Disponible</span>
+                    <span className="text-xl font-bold text-green-900">
+                      ${availableBalance.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
                 </div>
               )}
 
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Monto a retirar
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2 text-gray-500">$</span>
+                  <input
+                    type="number"
+                    value={withdrawalAmount}
+                    onChange={(e) => setWithdrawalAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    min="0"
+                    step="0.01"
+                    max={availableBalance > 0 ? availableBalance : undefined}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Método de retiro
+                </label>
+                <select
+                  value={withdrawalMethod}
+                  onChange={(e) => setWithdrawalMethod(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="transferencia">Transferencia bancaria</option>
+                  <option value="efectivo">Efectivo</option>
+                  <option value="cheque">Cheque</option>
+                  <option value="crypto">Criptomonedas</option>
+                  <option value="otro">Otro</option>
+                </select>
+              </div>
+
+              {/* Advertencia importante */}
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                 <div className="flex">
                   <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="h-5 w-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
                     </svg>
                   </div>
                   <div className="ml-3">
-                    <h3 className="text-sm font-medium text-green-800">
-                      Información importante
+                    <h3 className="text-sm font-medium text-yellow-800">
+                      Importante
                     </h3>
-                    <div className="mt-2 text-sm text-green-700">
-                      <ul className="list-disc list-inside space-y-1">
-                        <li>El procesamiento puede tomar 3-5 días hábiles</li>
-                        <li>Se aplicarán las comisiones correspondientes</li>
-                        <li>Recibirás confirmación por email</li>
-                      </ul>
+                    <div className="mt-2 text-sm text-yellow-700">
+                      <p>Los retiros pueden tardar 2-5 días hábiles en procesarse. Se aplicarán las comisiones correspondientes.</p>
                     </div>
                   </div>
                 </div>
@@ -147,8 +161,8 @@ export function WithdrawalButton({ onWithdrawalRequest }: WithdrawalButtonProps)
               <div className="flex space-x-3">
                 <button
                   onClick={handleWithdrawalRequest}
-                  disabled={loading || !withdrawalAmount || !withdrawalReason}
-                  className="flex-1 bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  disabled={loading || !withdrawalAmount}
+                  className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {loading ? (
                     <div className="flex items-center justify-center">
@@ -156,7 +170,7 @@ export function WithdrawalButton({ onWithdrawalRequest }: WithdrawalButtonProps)
                       Procesando...
                     </div>
                   ) : (
-                    'Enviar Solicitud'
+                    'Confirmar Retiro'
                   )}
                 </button>
                 <button

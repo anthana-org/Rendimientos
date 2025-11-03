@@ -1,14 +1,18 @@
 import { useState } from 'react';
+import { useAuth } from '../hooks/useAuth';
+import { EmailService } from '../services/emailService';
 
 interface DepositButtonProps {
   onDepositRequest?: () => void;
 }
 
+const ADMIN_EMAIL = 'admin@test.com'; // Email del administrador
+
 export function DepositButton({ onDepositRequest }: DepositButtonProps) {
+  const { user } = useAuth();
   const [showModal, setShowModal] = useState(false);
   const [depositAmount, setDepositAmount] = useState('');
-  const [depositMethod, setDepositMethod] = useState('');
-  const [depositNotes, setDepositNotes] = useState('');
+  const [depositMethod, setDepositMethod] = useState('tarjeta');
   const [loading, setLoading] = useState(false);
 
   const handleDepositRequest = async () => {
@@ -17,32 +21,36 @@ export function DepositButton({ onDepositRequest }: DepositButtonProps) {
       return;
     }
 
+    const amount = parseFloat(depositAmount);
+    if (isNaN(amount) || amount <= 0) {
+      alert('Por favor ingresa un monto válido');
+      return;
+    }
+
     setLoading(true);
     
     try {
-      // Aquí se implementaría la lógica para procesar la solicitud de depósito
-      console.log('Solicitud de depósito:', {
-        amount: depositAmount,
+      // Enviar notificación al administrador
+      EmailService.notifyAdmin(ADMIN_EMAIL, {
+        userEmail: user?.email || 'Usuario no identificado',
+        userName: user?.displayName || undefined,
+        amount: amount,
         method: depositMethod,
-        notes: depositNotes,
+        type: 'deposit',
         timestamp: new Date().toISOString()
       });
       
-      // Simular procesamiento
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      alert('Solicitud de depósito enviada exitosamente. Te contactaremos pronto.');
+      alert('Solicitud de depósito enviada. El administrador será notificado y te contactará pronto.');
       setShowModal(false);
       setDepositAmount('');
       setDepositMethod('');
-      setDepositNotes('');
       
       if (onDepositRequest) {
         onDepositRequest();
       }
     } catch (error) {
-      console.error('Error procesando solicitud de depósito:', error);
-      alert('Error al procesar la solicitud. Inténtalo de nuevo.');
+      console.error('Error enviando solicitud de depósito:', error);
+      alert('Error al enviar la solicitud. Inténtalo de nuevo.');
     } finally {
       setLoading(false);
     }
@@ -66,7 +74,7 @@ export function DepositButton({ onDepositRequest }: DepositButtonProps) {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-semibold text-gray-900">Solicitar Depósito</h3>
+              <h3 className="text-xl font-semibold text-gray-900">Realizar Depósito</h3>
               <button
                 onClick={() => setShowModal(false)}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -80,22 +88,25 @@ export function DepositButton({ onDepositRequest }: DepositButtonProps) {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Monto a depositar (MXN) *
+                  Monto a depositar *
                 </label>
-                <input
-                  type="number"
-                  value={depositAmount}
-                  onChange={(e) => setDepositAmount(e.target.value)}
-                  placeholder="Ingresa el monto"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                  min="1"
-                  step="0.01"
-                />
+                <div className="relative">
+                  <span className="absolute left-3 top-2 text-gray-500">$</span>
+                  <input
+                    type="number"
+                    value={depositAmount}
+                    onChange={(e) => setDepositAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Método de depósito *
+                  Método de pago *
                 </label>
                 <select
                   value={depositMethod}
@@ -103,6 +114,7 @@ export function DepositButton({ onDepositRequest }: DepositButtonProps) {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
                 >
                   <option value="">Selecciona un método</option>
+                  <option value="tarjeta">Tarjeta de crédito</option>
                   <option value="transferencia">Transferencia bancaria</option>
                   <option value="efectivo">Depósito en efectivo</option>
                   <option value="cheque">Cheque</option>
@@ -111,37 +123,22 @@ export function DepositButton({ onDepositRequest }: DepositButtonProps) {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Notas adicionales (opcional)
-                </label>
-                <textarea
-                  value={depositNotes}
-                  onChange={(e) => setDepositNotes(e.target.value)}
-                  placeholder="Información adicional sobre el depósito..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                  rows={3}
-                />
-              </div>
-
               {/* Información adicional */}
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <div className="flex">
                   <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="h-5 w-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
                   <div className="ml-3">
-                    <h3 className="text-sm font-medium text-green-800">
-                      Información importante
+                    <h3 className="text-sm font-medium text-blue-800">
+                      Información
                     </h3>
-                    <div className="mt-2 text-sm text-green-700">
+                    <div className="mt-2 text-sm text-blue-700">
                       <ul className="list-disc list-inside space-y-1">
-                        <li>El depósito se procesará en 1-2 días hábiles</li>
-                        <li>Recibirás confirmación por email</li>
-                        <li>El monto se reflejará en tu balance</li>
-                        <li>No hay comisiones por depósito</li>
+                        <li>Los depósitos se procesan en 1-3 días hábiles</li>
+                        <li>Recibirá una confirmación por email</li>
                       </ul>
                     </div>
                   </div>
@@ -160,7 +157,7 @@ export function DepositButton({ onDepositRequest }: DepositButtonProps) {
                       Procesando...
                     </div>
                   ) : (
-                    'Enviar Solicitud'
+                    'Confirmar Depósito'
                   )}
                 </button>
                 <button
