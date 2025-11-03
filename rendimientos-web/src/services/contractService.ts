@@ -120,10 +120,10 @@ export class ContractService {
           remainingDays,
           daysRemaining: remainingDays,
           contractDuration,
-          pdfUrl: data.pdfUrl || null,
-          pdfFileName: data.pdfFileName || null,
-          pdfData: data.pdfData || null,
-          pdfMimeType: data.pdfMimeType || null
+          pdfUrl: data.pdfUrl || undefined,
+          pdfFileName: data.pdfFileName || undefined,
+          pdfData: data.pdfData || undefined,
+          pdfMimeType: data.pdfMimeType || undefined
         });
       });
 
@@ -172,10 +172,10 @@ export class ContractService {
           remainingDays,
           daysRemaining: remainingDays,
           contractDuration,
-          pdfUrl: data.pdfUrl || null,
-          pdfFileName: data.pdfFileName || null,
-          pdfData: data.pdfData || null,
-          pdfMimeType: data.pdfMimeType || null
+          pdfUrl: data.pdfUrl || undefined,
+          pdfFileName: data.pdfFileName || undefined,
+          pdfData: data.pdfData || undefined,
+          pdfMimeType: data.pdfMimeType || undefined
         });
       });
 
