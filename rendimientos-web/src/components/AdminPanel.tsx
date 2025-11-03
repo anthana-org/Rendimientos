@@ -200,7 +200,7 @@ export default function AdminPanel() {
       let successCount = 0;
       let errorCount = 0;
       const errors: string[] = [];
-      let pdfUrl = '';
+      let pdfUrl: string | undefined = undefined;
 
       // Upload PDF if provided
       if (contractPdfFile) {
@@ -245,9 +245,9 @@ export default function AdminPanel() {
           startDate: startDate.toISOString().split('T')[0],
           expirationDate: endDate.toISOString().split('T')[0],
           status: newContract.status as "active" | "inactive" | "expired",
-          pdfUrl: pdfUrl ? pdfUrl : undefined,
+          pdfUrl: pdfUrl,
           pdfFileName: contractPdfFile?.name || undefined,
-          pdfData: pdfUrl ? pdfUrl : undefined, // Base64 data
+          pdfData: pdfUrl, // Base64 data
           pdfMimeType: contractPdfFile?.type || undefined
         };
 
