@@ -1,21 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { ContractService } from '../services/contractService';
+import { ContractService, type ContractExpiration } from '../services/contractService';
 import { PerformanceChart } from '../components/PerformanceChart';
 import jsPDF from 'jspdf';
 
-interface Contract {
-  id: string;
-  contractType: string;
-  investmentAmount: number;
-  monthlyReturn: number;
-  startDate: string;
-  expirationDate: string;
-  status: string;
-  remainingDays?: number;
-  pdfUrl?: string;
-  pdfFileName?: string;
-}
+type Contract = ContractExpiration;
 
 interface Rendimiento {
   period: string;

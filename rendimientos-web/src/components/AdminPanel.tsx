@@ -6,8 +6,7 @@ import { PerformanceChart } from './PerformanceChart';
 import { useAuth } from '../hooks/useAuth';
 import * as XLSX from 'xlsx';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db, storage } from '../firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db } from '../firebase';
 import jsPDF from 'jspdf';
 
 interface User {
@@ -246,10 +245,10 @@ export default function AdminPanel() {
           startDate: startDate.toISOString().split('T')[0],
           expirationDate: endDate.toISOString().split('T')[0],
           status: newContract.status as "active" | "inactive" | "expired",
-          pdfUrl: pdfUrl || null,
-          pdfFileName: contractPdfFile?.name || null,
-          pdfData: pdfUrl || null, // Base64 data
-          pdfMimeType: contractPdfFile?.type || null
+          pdfUrl: pdfUrl ? pdfUrl : undefined,
+          pdfFileName: contractPdfFile?.name || undefined,
+          pdfData: pdfUrl ? pdfUrl : undefined, // Base64 data
+          pdfMimeType: contractPdfFile?.type || undefined
         };
 
         console.log('Creando contrato con datos:', contractData);
