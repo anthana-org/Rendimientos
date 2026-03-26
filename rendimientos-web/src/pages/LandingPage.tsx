@@ -96,7 +96,7 @@ export default function LandingPage() {
       </header>
 
       {/* Hero Section */}
-      <section className="relative bg-gradient-to-br from-gray-900/30 via-gray-800/20 to-black py-16 sm:py-20 lg:py-24 xl:py-32 2xl:py-40">
+      <section className="relative bg-gradient-to-br from-gray-900/30 via-gray-800/20 to-black py-10 sm:py-14 lg:py-16 xl:py-20 2xl:py-24">
         {/* Additional background elements for hero */}
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute -top-40 -right-40 w-80 h-80 bg-green-500/5 rounded-full mix-blend-screen filter blur-xl opacity-40 animate-pulse"></div>
@@ -108,8 +108,8 @@ export default function LandingPage() {
               Maximiza tus Rendimientos con{' '}
               <span className="bg-gradient-to-r from-gray-300 to-gray-400 bg-clip-text text-transparent">Tecnología Avanzada</span>
             </h1>
-            <p className="text-lg sm:text-xl lg:text-2xl xl:text-3xl text-gray-400 mb-6 sm:mb-8 xl:mb-12 max-w-4xl xl:max-w-5xl mx-auto leading-relaxed px-4">
-              Gestiona tus inversiones de forma inteligente con nuestra plataforma de análisis financiero y proyecciones en tiempo real.
+            <p className="text-lg sm:text-xl lg:text-2xl xl:text-3xl text-gray-300 mb-6 sm:mb-8 xl:mb-10 max-w-4xl xl:max-w-5xl mx-auto leading-relaxed px-4 font-medium">
+              Estrategias algorítmicas + supervisión humana en tiempo real.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 xl:gap-6 justify-center px-4">
               <button
@@ -125,6 +125,26 @@ export default function LandingPage() {
                 Iniciar Sesión
               </button>
             </div>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-8 mt-6 xl:mt-8 text-sm text-gray-400">
+              <span className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Transparencia verificable
+              </span>
+              <span className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Control total de capital
+              </span>
+              <span className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Sin intermediarios
+              </span>
+            </div>
           </div>
         </div>
       </section>
@@ -139,64 +159,40 @@ export default function LandingPage() {
             </p>
           </div>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-8 sm:gap-10 xl:gap-14">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 sm:gap-10 xl:gap-14">
             <div className="text-center p-6 sm:p-8 xl:p-10 rounded-xl bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 hover:bg-gray-800/50 hover:border-green-500/30 transition-all duration-300">
-              <div className="w-12 h-12 sm:w-16 sm:h-16 xl:w-20 xl:h-20 bg-gradient-to-br from-gray-300 to-gray-500 rounded-full flex items-center justify-center mx-auto mb-6 xl:mb-8">
-                <svg className="w-6 h-6 sm:w-8 sm:h-8 xl:w-10 xl:h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 xl:w-20 xl:h-20 bg-gradient-to-br from-gray-300 to-gray-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg className="w-7 h-7 sm:w-8 sm:h-8 xl:w-10 xl:h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
               </div>
-              <h3 className="text-lg sm:text-xl xl:text-2xl font-semibold text-white mb-4 xl:mb-6">Métricas Claras</h3>
-              <p className="text-sm sm:text-base xl:text-lg text-gray-400 leading-relaxed font-medium">
-                Visualiza tu progreso con dashboards intuitivos. Entiende de dónde viene y a dónde va tu dinero.
-              </p>
-            </div>
-            
-            <div className="text-center p-6 sm:p-8 xl:p-10 rounded-xl bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 hover:bg-gray-800/50 hover:border-green-500/30 transition-all duration-300">
-              <div className="w-12 h-12 sm:w-16 sm:h-16 xl:w-20 xl:h-20 bg-gradient-to-br from-green-500 to-green-600 rounded-full flex items-center justify-center mx-auto mb-6 xl:mb-8">
-                <svg className="w-6 h-6 sm:w-8 sm:h-8 xl:w-10 xl:h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
-              </div>
-              <h3 className="text-lg sm:text-xl xl:text-2xl font-semibold text-white mb-4 xl:mb-6">Seguridad Total</h3>
+              <h3 className="text-lg sm:text-xl xl:text-2xl font-semibold text-white mb-4">Control de Capital</h3>
               <p className="text-sm sm:text-base xl:text-lg text-gray-400 leading-relaxed">
-                Tu información es confidencial y está protegida con los más altos estándares de seguridad.
+                Separa tu capital disponible del capital en operación. Visibilidad total de dónde está tu dinero en todo momento.
               </p>
             </div>
-            
+
             <div className="text-center p-6 sm:p-8 xl:p-10 rounded-xl bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 hover:bg-gray-800/50 hover:border-green-500/30 transition-all duration-300">
-              <div className="w-12 h-12 sm:w-16 sm:h-16 xl:w-20 xl:h-20 bg-gradient-to-br from-green-500 to-green-600 rounded-full flex items-center justify-center mx-auto mb-6 xl:mb-8">
-                <svg className="w-6 h-6 sm:w-8 sm:h-8 xl:w-10 xl:h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-              </div>
-              <h3 className="text-lg sm:text-xl xl:text-2xl font-semibold text-white mb-4 xl:mb-6">Asesoría Experta</h3>
-              <p className="text-sm sm:text-base xl:text-lg text-gray-400 leading-relaxed">
-                Accede a una red de asesores financieros listos para guiarte en cada paso de tu camino.
-              </p>
-            </div>
-            
-            <div className="text-center p-6 sm:p-8 xl:p-10 rounded-xl bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 hover:bg-gray-800/50 hover:border-green-500/30 transition-all duration-300">
-              <div className="w-12 h-12 sm:w-16 sm:h-16 xl:w-20 xl:h-20 bg-gradient-to-br from-gray-400 to-gray-600 rounded-full flex items-center justify-center mx-auto mb-6 xl:mb-8">
-                <svg className="w-6 h-6 sm:w-8 sm:h-8 xl:w-10 xl:h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 xl:w-20 xl:h-20 bg-gradient-to-br from-green-500 to-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg className="w-7 h-7 sm:w-8 sm:h-8 xl:w-10 xl:h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
               </div>
-              <h3 className="text-lg sm:text-xl xl:text-2xl font-semibold text-white mb-4 xl:mb-6">Rapidez</h3>
+              <h3 className="text-lg sm:text-xl xl:text-2xl font-semibold text-white mb-4">Ejecución Híbrida</h3>
               <p className="text-sm sm:text-base xl:text-lg text-gray-400 leading-relaxed">
-                Procesos instantáneos y respuestas rápidas para que no pierdas oportunidades de inversión.
+                Estrategias algorítmicas ejecutadas con supervisión humana en tiempo real. Lo mejor de ambos mundos trabajando para ti.
               </p>
             </div>
-            
+
             <div className="text-center p-6 sm:p-8 xl:p-10 rounded-xl bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 hover:bg-gray-800/50 hover:border-green-500/30 transition-all duration-300">
-              <div className="w-12 h-12 sm:w-16 sm:h-16 xl:w-20 xl:h-20 bg-gradient-to-br from-green-400 to-green-500 rounded-full flex items-center justify-center mx-auto mb-6 xl:mb-8">
-                <svg className="w-6 h-6 sm:w-8 sm:h-8 xl:w-10 xl:h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 xl:w-20 xl:h-20 bg-gradient-to-br from-green-400 to-green-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg className="w-7 h-7 sm:w-8 sm:h-8 xl:w-10 xl:h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
-              <h3 className="text-lg sm:text-xl xl:text-2xl font-semibold text-white mb-4 xl:mb-6">Confianza</h3>
+              <h3 className="text-lg sm:text-xl xl:text-2xl font-semibold text-white mb-4">Operación Real</h3>
               <p className="text-sm sm:text-base xl:text-lg text-gray-400 leading-relaxed">
-                Miles de usuarios confían en nosotros para gestionar sus finanzas de manera segura y eficiente.
+                Sin intermediarios. Tu capital trabaja directamente en estrategias financieras verificables con resultados reales.
               </p>
             </div>
           </div>
@@ -213,28 +209,28 @@ export default function LandingPage() {
             </p>
           </div>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 sm:gap-10">
-            <div className="text-center">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-r from-gray-300 to-gray-400 text-black rounded-full flex items-center justify-center text-xl sm:text-2xl font-bold mx-auto mb-6 sm:mb-8 shadow-lg">1</div>
-              <h3 className="text-lg sm:text-2xl font-semibold text-white mb-4 sm:mb-6">Regístrate</h3>
-              <p className="text-sm sm:text-base text-gray-400 leading-relaxed px-4">
-                Crea tu cuenta en menos de un minuto y completa tu perfil inicial.
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+            <div className="text-center p-6 sm:p-8 rounded-xl bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 hover:border-green-500/30 transition-all duration-300">
+              <div className="w-20 h-20 bg-gradient-to-r from-gray-300 to-gray-400 text-black rounded-full flex items-center justify-center text-2xl font-bold mx-auto mb-6 shadow-lg">1</div>
+              <h3 className="text-xl font-semibold text-white mb-4">Regístrate</h3>
+              <p className="text-base text-gray-400 leading-relaxed">
+                Crea tu cuenta en minutos y completa tu perfil de inversor.
               </p>
             </div>
-            
-            <div className="text-center">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-r from-gray-300 to-gray-400 text-black rounded-full flex items-center justify-center text-xl sm:text-2xl font-bold mx-auto mb-6 sm:mb-8 shadow-lg">2</div>
-              <h3 className="text-lg sm:text-2xl font-semibold text-white mb-4 sm:mb-6">Conecta</h3>
-              <p className="text-sm sm:text-base text-gray-400 leading-relaxed px-4">
-                Vincula tus servicios o elige las herramientas que necesitas para empezar.
+
+            <div className="text-center p-6 sm:p-8 rounded-xl bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 hover:border-green-500/30 transition-all duration-300">
+              <div className="w-20 h-20 bg-gradient-to-r from-gray-300 to-gray-400 text-black rounded-full flex items-center justify-center text-2xl font-bold mx-auto mb-6 shadow-lg">2</div>
+              <h3 className="text-xl font-semibold text-white mb-4">Deposita</h3>
+              <p className="text-base text-gray-400 leading-relaxed">
+                Realiza tu depósito inicial y activa tu contrato de inversión.
               </p>
             </div>
-            
-            <div className="text-center">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-r from-gray-300 to-gray-400 text-black rounded-full flex items-center justify-center text-xl sm:text-2xl font-bold mx-auto mb-6 sm:mb-8 shadow-lg">3</div>
-              <h3 className="text-lg sm:text-2xl font-semibold text-white mb-4 sm:mb-6">Crece</h3>
-              <p className="text-sm sm:text-base text-gray-400 leading-relaxed px-4">
-                Monitorea tu progreso, ajusta tu estrategia y ve crecer tu patrimonio.
+
+            <div className="text-center p-6 sm:p-8 rounded-xl bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 hover:border-green-500/30 transition-all duration-300">
+              <div className="w-20 h-20 bg-gradient-to-r from-gray-300 to-gray-400 text-black rounded-full flex items-center justify-center text-2xl font-bold mx-auto mb-6 shadow-lg">3</div>
+              <h3 className="text-xl font-semibold text-white mb-4">Crece</h3>
+              <p className="text-base text-gray-400 leading-relaxed">
+                Monitorea tu capital en tiempo real y ve crecer tu patrimonio cada mes.
               </p>
             </div>
           </div>
@@ -324,15 +320,30 @@ export default function LandingPage() {
               Te presentamos tu futuro panel de control. Una herramienta poderosa y fácil de usar para monitorear cada aspecto de tu prosperidad.
             </p>
           </div>
-          
+
+          <p className="text-center text-gray-500 text-xs uppercase tracking-widest mb-4 font-medium">Ejemplo de cuenta en operación</p>
           <div className="bg-gray-900/50 backdrop-blur-sm border-2 border-gray-700/50 rounded-2xl shadow-2xl p-4 sm:p-6 lg:p-8 xl:p-12 max-w-5xl xl:max-w-6xl mx-auto">
             <div className="mb-4 sm:mb-6 xl:mb-8">
-              <h3 className="text-lg sm:text-2xl xl:text-3xl font-bold text-white mb-2 xl:mb-4">Panel Principal</h3>
-              <div className="flex items-center">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 xl:w-12 xl:h-12 bg-gradient-to-br from-gray-300 to-gray-500 rounded-full flex items-center justify-center text-white font-semibold mr-3 text-xs sm:text-sm xl:text-base">
-                  UD
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                <div className="flex items-center">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 xl:w-12 xl:h-12 bg-gradient-to-br from-gray-300 to-gray-500 rounded-full flex items-center justify-center text-white font-semibold mr-3 text-xs sm:text-sm xl:text-base">
+                    UD
+                  </div>
+                  <div>
+                    <p className="text-white text-sm sm:text-base xl:text-lg font-semibold">USUARIO DEMOSTRACIÓN</p>
+                    <p className="text-gray-500 text-xs">Panel Principal</p>
+                  </div>
                 </div>
-                <span className="text-gray-400 text-sm sm:text-base xl:text-lg">USUARIO DEMOSTRACIÓN</span>
+                <div className="flex gap-4 text-sm">
+                  <div className="text-center">
+                    <p className="text-gray-400 text-xs">Resultado del mes</p>
+                    <p className="text-green-400 font-bold">+$2,890.50</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-gray-400 text-xs">Rendimiento acumulado</p>
+                    <p className="text-green-400 font-bold">+12.4%</p>
+                  </div>
+                </div>
               </div>
             </div>
             
@@ -359,7 +370,7 @@ export default function LandingPage() {
                   onClick={handleRegister}
                   className="bg-gradient-to-r from-gray-300 to-gray-400 text-black px-3 sm:px-4 xl:px-6 py-2 xl:py-3 rounded-lg font-semibold hover:shadow-lg hover:from-green-300 hover:to-green-400 transition-all duration-300 text-xs sm:text-sm xl:text-base w-full"
                 >
-                  Abrir mi Cuenta Gratis
+                  Comenzar a Invertir
                 </button>
               </div>
             </div>

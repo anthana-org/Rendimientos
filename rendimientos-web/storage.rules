@@ -17,7 +17,7 @@ service firebase.storage {
       );
       
       // Validar tamaño del archivo (máximo 10MB)
-      allow create: if request.resource.size < 10 * 1024 * 1024;
+      allow create: if request.auth != null && request.resource.size < 10 * 1024 * 1024;
     }
   }
 }
